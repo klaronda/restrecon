@@ -29,17 +29,17 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
             <span className="text-gray-900 text-xl">NestRecon</span>
           </Link>
           
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900">How It Works</a>
-            <a href="#pricing" className="text-gray-600 hover:text-gray-900">Pricing</a>
-            <a href="#faq" className="text-gray-600 hover:text-gray-900">FAQ</a>
+          {/* Desktop Navigation - visible on md and up */}
+          <nav className="hidden md:flex items-center gap-6">
+            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
+            <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</a>
+            <a href="#faq" className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</a>
             {isLoggedIn ? (
               <>
-                <Link to="/account" className="text-gray-600 hover:text-gray-900">Open Mission Control</Link>
+                <Link to="/account" className="text-gray-600 hover:text-gray-900 transition-colors">Open Mission Control</Link>
                 <button
                   onClick={onLogout}
-                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
+                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors"
                   aria-label="Log out of your account"
                 >
                   <LogOut className="w-4 h-4" aria-hidden="true" />
@@ -48,21 +48,21 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
               </>
             ) : (
               <>
-                <Link to="/login" className="text-gray-600 hover:text-gray-900">Log In</Link>
+                <Link to="/login" className="text-gray-600 hover:text-gray-900 transition-colors">Log In</Link>
                 <Link 
                   to="/signup" 
-                  className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28]"
+                  className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
                 >
                   Start Free Trial
                 </Link>
               </>
             )}
-          </div>
+          </nav>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button - hidden on md and up */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-gray-600 hover:text-gray-900"
+            className="md:hidden p-2 text-gray-600 hover:text-gray-900 transition-colors"
             aria-label="Toggle mobile menu"
             aria-expanded={mobileMenuOpen}
           >
