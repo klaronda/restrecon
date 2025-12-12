@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /billing
+Disallow: /trial-ended
+Disallow: /success
+
+Sitemap: https://nestrecon.com/sitemap.xml
+
