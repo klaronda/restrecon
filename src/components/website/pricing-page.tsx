@@ -71,15 +71,8 @@ export function PricingPage({ isLoggedIn = false }: PricingPageProps) {
               />
               <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 md:hidden transform transition-transform duration-300 ease-in-out">
                 <div className="flex flex-col h-full">
-                  <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <div className="flex items-center p-6 border-b border-gray-200">
                     <span className="text-gray-900 text-xl font-semibold">Menu</span>
-                    <button
-                      onClick={closeMobileMenu}
-                      className="p-2 text-gray-600 hover:text-gray-900"
-                      aria-label="Close menu"
-                    >
-                      <X className="w-6 h-6" />
-                    </button>
                   </div>
                   <nav className="flex-1 overflow-y-auto p-6">
                     <div className="flex flex-col gap-6">

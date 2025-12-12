@@ -29,17 +29,17 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
             <span className="text-gray-900 text-xl">NestRecon</span>
           </Link>
           
-          {/* Desktop Navigation - visible on md and up */}
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
-            <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</a>
-            <a href="#faq" className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</a>
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900">How It Works</a>
+            <a href="#pricing" className="text-gray-600 hover:text-gray-900">Pricing</a>
+            <a href="#faq" className="text-gray-600 hover:text-gray-900">FAQ</a>
             {isLoggedIn ? (
               <>
-                <Link to="/account" className="text-gray-600 hover:text-gray-900 transition-colors">Open Mission Control</Link>
+                <Link to="/account" className="text-gray-600 hover:text-gray-900">Open Mission Control</Link>
                 <button
                   onClick={onLogout}
-                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors"
+                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
                   aria-label="Log out of your account"
                 >
                   <LogOut className="w-4 h-4" aria-hidden="true" />
@@ -48,21 +48,21 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
               </>
             ) : (
               <>
-                <Link to="/login" className="text-gray-600 hover:text-gray-900 transition-colors">Log In</Link>
+                <Link to="/login" className="text-gray-600 hover:text-gray-900">Log In</Link>
                 <Link 
                   to="/signup" 
-                  className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
+                  className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28]"
                 >
                   Start Free Trial
                 </Link>
               </>
             )}
-          </nav>
+          </div>
 
-          {/* Mobile Menu Button - hidden on md and up */}
+          {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-gray-600 hover:text-gray-900 transition-colors"
+            className="md:hidden p-2 text-gray-600 hover:text-gray-900"
             aria-label="Toggle mobile menu"
             aria-expanded={mobileMenuOpen}
           >
@@ -84,15 +84,8 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
             />
             <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 md:hidden transform transition-transform duration-300 ease-in-out">
               <div className="flex flex-col h-full">
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="flex items-center p-6 border-b border-gray-200">
                   <span className="text-gray-900 text-xl font-semibold">Menu</span>
-                  <button
-                    onClick={closeMobileMenu}
-                    className="p-2 text-gray-600 hover:text-gray-900"
-                    aria-label="Close menu"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
                 </div>
                 <nav className="flex-1 overflow-y-auto p-6">
                   <div className="flex flex-col gap-6">
