@@ -430,45 +430,73 @@ function App() {
     let isMounted = true;
     let authSub: { unsubscribe: () => void } | null = null;
 
-    const initSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      if (session?.user && isMounted) {
-        const profile = await supabase
-          .from('users')
-          .select('first_name, last_name, email, plan, trial_ends_at')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle();
-        if (profile.error) {
-          console.error(profile.error);
-        } else {
-          applyProfile(profile.data, session.user.email);
+      const initSession = async () => {
+      try {
+        console.log('[App] Initializing session...');
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('[App] Error getting session:', sessionError);
+          setAuthReady(true); // Still set ready so app can render
+          return;
         }
-      }
-
-      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!isMounted) return;
-        console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
-        if (session?.user) {
-          const profile = await supabase
-            .from('users')
-            .select('first_name, last_name, email, plan, trial_ends_at')
-            .eq('auth_user_id', session.user.id)
-            .maybeSingle();
-          if (profile.error) {
-            console.error('[App] Profile fetch error on auth state change:', profile.error);
-            resetAuthState();
-          } else {
-            console.log('[App] Applying profile from auth state change:', { plan: profile.data?.plan, email: profile.data?.email });
-            applyProfile(profile.data, session.user.email);
+        
+        const session = data.session;
+        console.log('[App] Initial session check:', { hasSession: !!session, userId: session?.user?.id });
+        
+        if (session?.user && isMounted) {
+          try {
+            const profile = await supabase
+              .from('users')
+              .select('first_name, last_name, email, plan, trial_ends_at')
+              .eq('auth_user_id', session.user.id)
+              .maybeSingle();
+            if (profile.error) {
+              console.error('[App] Profile fetch error on init:', profile.error);
+            } else {
+              console.log('[App] Applying initial profile:', { plan: profile.data?.plan, email: profile.data?.email });
+              applyProfile(profile.data, session.user.email);
+            }
+          } catch (profileErr) {
+            console.error('[App] Error fetching profile on init:', profileErr);
           }
-        } else {
-          console.log('[App] No session, resetting auth state');
+        } else if (!session && isMounted) {
+          console.log('[App] No initial session found');
           resetAuthState();
         }
-      });
-      authSub = listener.subscription;
-      setAuthReady(true);
+
+        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!isMounted) return;
+          console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
+          if (session?.user) {
+            try {
+              const profile = await supabase
+                .from('users')
+                .select('first_name, last_name, email, plan, trial_ends_at')
+                .eq('auth_user_id', session.user.id)
+                .maybeSingle();
+              if (profile.error) {
+                console.error('[App] Profile fetch error on auth state change:', profile.error);
+                resetAuthState();
+              } else {
+                console.log('[App] Applying profile from auth state change:', { plan: profile.data?.plan, email: profile.data?.email });
+                applyProfile(profile.data, session.user.email);
+              }
+            } catch (profileErr) {
+              console.error('[App] Error in auth state change handler:', profileErr);
+            }
+          } else {
+            console.log('[App] No session, resetting auth state');
+            resetAuthState();
+          }
+        });
+        authSub = listener.subscription;
+        setAuthReady(true);
+        console.log('[App] Auth initialization complete, authReady set to true');
+      } catch (err) {
+        console.error('[App] Error in initSession:', err);
+        setAuthReady(true); // Still set ready so app can render
+      }
     };
 
     void initSession();
@@ -513,10 +541,18 @@ function App() {
           path="/account" 
           element={
             (() => {
-              console.log('[App] Account route check:', { isLoggedIn, authReady, showPrefsWizard });
+              console.log('[App] Account route check:', { 
+                isLoggedIn, 
+                authReady, 
+                showPrefsWizard,
+                userName,
+                subscriptionStatus 
+              });
+              
               if (!authReady) {
+                console.log('[App] Auth not ready, showing loading');
                 return (
-                  <div className="min-h-screen flex items-center justify-center">
+                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#556B2F] mx-auto mb-4"></div>
                       <p className="text-gray-600">Initializing...</p>
@@ -524,11 +560,14 @@ function App() {
                   </div>
                 );
               }
+              
               if (!isLoggedIn) {
                 console.log('[App] Not logged in, redirecting to login');
                 return <Navigate to="/login" replace />;
               }
+              
               if (showPrefsWizard) {
+                console.log('[App] Showing preferences wizard');
                 return (
                   <OnboardingChat
                     userName={userName}
@@ -541,7 +580,27 @@ function App() {
                   />
                 );
               }
-              return <AccountRoute />;
+              
+              console.log('[App] Rendering AccountRoute');
+              try {
+                return <AccountRoute />;
+              } catch (err) {
+                console.error('[App] Error rendering AccountRoute:', err);
+                return (
+                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
+                    <div className="text-center max-w-md">
+                      <h1 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Account</h1>
+                      <p className="text-gray-600 mb-4">There was an error loading your account page.</p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28]"
+                      >
+                        Reload Page
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
             })()
           } 
         />
