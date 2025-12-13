@@ -334,3 +334,4 @@ export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps
   );
 }
 
+

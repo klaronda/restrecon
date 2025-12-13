@@ -283,7 +283,11 @@ function App() {
 
   const AccountRoute = () => {
     useEffect(() => {
-      void refreshProfile();
+      // Refresh profile on mount to ensure we have the latest plan status
+      console.log('[App] AccountRoute: Refreshing profile on mount');
+      void refreshProfile().then((status) => {
+        console.log('[App] AccountRoute: Profile refreshed, status:', status);
+      });
       void loadPreferences();
     }, []);
 
@@ -295,7 +299,12 @@ function App() {
         trialDaysRemaining={trialDaysRemaining}
         onLogout={handleLogout}
         onManageBilling={handleManageBilling}
-        onRefreshStatus={refreshProfile}
+        onRefreshStatus={async () => {
+          console.log('[App] AccountRoute: Manual profile refresh triggered');
+          const status = await refreshProfile();
+          console.log('[App] AccountRoute: Manual refresh complete, status:', status);
+          return status;
+        }}
         preferences={preferences}
         onStartPreferences={() => setShowPrefsWizard(true)}
       />
@@ -531,11 +540,11 @@ function App() {
         />
         <Route 
           path="/pricing" 
-          element={<PricingPage isLoggedIn={isLoggedIn} />} 
+          element={<PricingPage isLoggedIn={isLoggedIn} onLogout={handleLogout} />} 
         />
         <Route 
           path="/faq" 
-          element={<FAQPage isLoggedIn={isLoggedIn} />} 
+          element={<FAQPage isLoggedIn={isLoggedIn} onLogout={handleLogout} />} 
         />
         <Route 
           path="/privacy" 

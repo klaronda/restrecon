@@ -1,136 +1,19 @@
-import { Check, Menu, X } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { RoverIcon } from '../rover-icon';
-import { useState } from 'react';
+import { Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { SharedNav } from './shared-nav';
 
 interface PricingPageProps {
   isLoggedIn?: boolean;
+  onLogout?: () => void;
 }
 
-export function PricingPage({ isLoggedIn = false }: PricingPageProps) {
+export function PricingPage({ isLoggedIn = false, onLogout }: PricingPageProps) {
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2">
-              <RoverIcon size={32} />
-              <span className="text-xl font-semibold text-gray-900">NestRecon</span>
-            </Link>
-            
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6">
-              <Link to="/" className="text-gray-600 hover:text-gray-900">Home</Link>
-              <Link to="/#how-it-works" className="text-gray-600 hover:text-gray-900">How It Works</Link>
-              <Link to="/faq" className="text-gray-600 hover:text-gray-900">FAQ</Link>
-              {isLoggedIn ? (
-                <Link to="/account" className="text-[#556B2F] hover:text-[#4a5e28] font-medium">
-                  Account
-                </Link>
-              ) : (
-                <>
-                  <Link to="/login" className="text-gray-600 hover:text-gray-900">Log In</Link>
-                  <Link
-                    to="/signup"
-                    className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-gray-600 hover:text-gray-900"
-              aria-label="Toggle mobile menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
-            </button>
-          </div>
-
-          {/* Mobile Menu Overlay */}
-          {mobileMenuOpen && (
-            <>
-              <div 
-                className="fixed inset-0 bg-black/50 z-40 md:hidden"
-                onClick={closeMobileMenu}
-                aria-hidden="true"
-              />
-              <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 md:hidden transform transition-transform duration-300 ease-in-out">
-                <div className="flex flex-col h-full">
-                  <div className="flex items-center p-6 border-b border-gray-200">
-                    <span className="text-gray-900 text-xl font-semibold">Menu</span>
-                  </div>
-                  <nav className="flex-1 overflow-y-auto p-6">
-                    <div className="flex flex-col gap-6">
-                      <Link 
-                        to="/" 
-                        className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                        onClick={closeMobileMenu}
-                      >
-                        Home
-                      </Link>
-                      <Link 
-                        to="/#how-it-works" 
-                        className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                        onClick={closeMobileMenu}
-                      >
-                        How It Works
-                      </Link>
-                      <Link 
-                        to="/faq" 
-                        className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                        onClick={closeMobileMenu}
-                      >
-                        FAQ
-                      </Link>
-                      {isLoggedIn ? (
-                        <Link 
-                          to="/account" 
-                          className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                          onClick={closeMobileMenu}
-                        >
-                          Account
-                        </Link>
-                      ) : (
-                        <>
-                          <Link 
-                            to="/login" 
-                            className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                            onClick={closeMobileMenu}
-                          >
-                            Log In
-                          </Link>
-                          <Link
-                            to="/signup"
-                            className="bg-[#556B2F] text-white px-6 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors text-center"
-                            onClick={closeMobileMenu}
-                          >
-                            Sign Up
-                          </Link>
-                        </>
-                      )}
-                    </div>
-                  </nav>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </header>
+      <SharedNav isLoggedIn={isLoggedIn} onLogout={onLogout} />
 
       {/* Pricing Section */}
       <section className="py-24 bg-white">

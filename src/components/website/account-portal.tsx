@@ -29,6 +29,14 @@ export function AccountPortal({
   const isTrialActive = subscriptionStatus === 'trial';
   const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
+  
+  // Debug logging for pro status
+  console.log('[AccountPortal] Subscription status check:', {
+    subscriptionStatus,
+    isPro,
+    isTrialActive,
+    isFree
+  });
 
   const [deviceInfo, setDeviceInfo] = useState<{
     browser: string;
@@ -77,30 +85,7 @@ export function AccountPortal({
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
       {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <img 
-              src="https://eqqbsiuqjnqpiiuumanu.supabase.co/storage/v1/object/public/site_assets/temp/Rover.svg" 
-              alt="Rover" 
-              className="w-8 h-8"
-            />
-            <span className="text-gray-900 text-xl">NestRecon</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link to="/" className="text-gray-600 hover:text-gray-900">
-              Home
-            </Link>
-            <button 
-              onClick={onLogout}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Log Out</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+      <SharedNav isLoggedIn={true} onLogout={onLogout} />
 
       {/* Header with Rover */}
       <div className="bg-gradient-to-br from-[#556B2F] to-[#4a5e28] py-16 relative overflow-hidden">
