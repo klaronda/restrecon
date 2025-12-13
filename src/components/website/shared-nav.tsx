@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SharedNavProps {
   isLoggedIn?: boolean;
@@ -9,6 +9,17 @@ interface SharedNavProps {
 
 export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsDesktop(window.innerWidth >= 768); // md breakpoint
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
@@ -27,60 +38,64 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
           <span className="text-gray-900 text-xl">NestRecon</span>
         </Link>
         
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center gap-8">
-          <a href="#how-it-works" className="text-gray-600 hover:text-gray-900">How It Works</a>
-          <Link to="/pricing" className="text-gray-600 hover:text-gray-900">Pricing</Link>
-          <Link to="/faq" className="text-gray-600 hover:text-gray-900">FAQ</Link>
-          {isLoggedIn ? (
-            <>
-              <Link to="/account" className="text-gray-600 hover:text-gray-900">My Account</Link>
-              <button
-                onClick={onLogout}
-                className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
-                aria-label="Log out of your account"
-              >
-                <LogOut className="w-4 h-4" aria-hidden="true" />
-                <span>Log Out</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="text-gray-600 hover:text-gray-900">Log In</Link>
-              <Link 
-                to="/signup" 
-                className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
-              >
-                Start Free Trial
-              </Link>
-            </>
-          )}
-        </div>
+        {/* Desktop Navigation - visible on screens 768px and larger */}
+        {isDesktop && (
+          <div className="flex items-center gap-6 lg:gap-8">
+            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
+            <Link to="/pricing" className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</Link>
+            <Link to="/faq" className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</Link>
+            {isLoggedIn ? (
+              <>
+                <Link to="/account" className="text-gray-600 hover:text-gray-900 transition-colors">My Account</Link>
+                <button
+                  onClick={onLogout}
+                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors"
+                  aria-label="Log out of your account"
+                >
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
+                  <span>Log Out</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="text-gray-600 hover:text-gray-900 transition-colors">Log In</Link>
+                <Link 
+                  to="/signup" 
+                  className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
+                >
+                  Start Free Trial
+                </Link>
+              </>
+            )}
+          </div>
+        )}
 
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 text-gray-600 hover:text-gray-900"
-          aria-label="Toggle mobile menu"
-          aria-expanded={mobileMenuOpen}
-        >
-          {mobileMenuOpen ? (
-            <X className="w-6 h-6" />
-          ) : (
-            <Menu className="w-6 h-6" />
-          )}
-        </button>
+        {/* Mobile Menu Button - only visible on small screens */}
+        {!isDesktop && (
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-gray-600 hover:text-gray-900"
+            aria-label="Toggle mobile menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <Menu className="w-6 h-6" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Mobile Menu Overlay */}
-      {mobileMenuOpen && (
+      {!isDesktop && mobileMenuOpen && (
         <>
           <div 
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            className="fixed inset-0 bg-black/50 z-40"
             onClick={closeMobileMenu}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 md:hidden transform transition-transform duration-300 ease-in-out">
+          <div className="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
             <div className="flex flex-col h-full">
               <div className="flex items-center p-6 border-b border-gray-200">
                 <span className="text-gray-900 text-xl font-semibold">Menu</span>
@@ -155,4 +170,3 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
     </nav>
   );
 }
-
