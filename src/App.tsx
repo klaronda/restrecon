@@ -325,11 +325,23 @@ function App() {
         // Try to create a profile if it doesn't exist
         // But first, let's try one more time to find by email with more logging
         console.log('[App] refreshProfile: No profile found, attempting final email search...');
-        const finalEmailSearch = await supabase
+        
+        // Try multiple query approaches
+        let finalEmailSearch = await supabase
           .from('users')
           .select('*')
           .eq('email', session.user.email ?? '')
           .maybeSingle();
+        
+        // If that didn't work, try with RPC or different approach
+        if (!finalEmailSearch.data && !finalEmailSearch.error) {
+          // Try selecting all columns explicitly
+          finalEmailSearch = await supabase
+            .from('users')
+            .select('id, auth_user_id, email, first_name, last_name, plan, trial_ends_at, created_at, updated_at')
+            .eq('email', session.user.email ?? '')
+            .maybeSingle();
+        }
         
         console.log('[App] refreshProfile: Final email search result:', {
           error: finalEmailSearch.error,
@@ -343,12 +355,19 @@ function App() {
           data: finalEmailSearch.data
         });
         
+        // Check if RLS might be blocking - log a warning
+        if (!finalEmailSearch.data && !finalEmailSearch.error) {
+          console.warn('[App] refreshProfile: Email query returned no data and no error. This might indicate RLS policies are blocking the query.');
+          console.warn('[App] refreshProfile: Profile exists in database but cannot be queried. Check RLS policies for users table.');
+        }
+        
         if (finalEmailSearch.data) {
           console.log('[App] refreshProfile: Found profile in final search!', finalEmailSearch.data);
           profile = finalEmailSearch;
           
           // Update auth_user_id if needed
           if (profile.data.auth_user_id !== session.user.id) {
+            console.log('[App] refreshProfile: Updating auth_user_id to match current session...');
             const updateResult = await supabase
               .from('users')
               .update({ auth_user_id: session.user.id })
@@ -357,7 +376,11 @@ function App() {
               .maybeSingle();
             
             if (updateResult.data) {
+              console.log('[App] refreshProfile: Successfully updated auth_user_id');
               profile = { data: updateResult.data, error: null };
+            } else if (updateResult.error) {
+              console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
+              // Continue with existing profile data even if update fails
             }
           }
         } else {
