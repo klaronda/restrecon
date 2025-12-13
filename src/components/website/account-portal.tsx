@@ -26,6 +26,15 @@ export function AccountPortal({
   preferences,
   onStartPreferences,
 }: AccountPortalProps) {
+  console.log('[AccountPortal] Component rendering with props:', {
+    userName,
+    userEmail,
+    subscriptionStatus,
+    trialDaysRemaining,
+    hasOnLogout: !!onLogout,
+    hasOnManageBilling: !!onManageBilling
+  });
+  
   const isTrialActive = subscriptionStatus === 'trial';
   const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
