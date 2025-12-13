@@ -284,26 +284,46 @@ function App() {
   const AccountRoute = () => {
     useEffect(() => {
       // Refresh profile on mount to ensure we have the latest plan status
-      console.log('[App] AccountRoute: Refreshing profile on mount');
-      void refreshProfile().then((status) => {
-        console.log('[App] AccountRoute: Profile refreshed, status:', status);
+      console.log('[App] AccountRoute: Component mounted, refreshing profile');
+      console.log('[App] AccountRoute: Current state', { 
+        isLoggedIn, 
+        userName, 
+        subscriptionStatus,
+        authReady 
       });
+      
+      const refresh = async () => {
+        try {
+          const status = await refreshProfile();
+          console.log('[App] AccountRoute: Profile refreshed, status:', status);
+        } catch (err) {
+          console.error('[App] AccountRoute: Error refreshing profile:', err);
+        }
+      };
+      
+      void refresh();
       void loadPreferences();
     }, []);
 
+    // Show account page even if some data is missing
     return (
       <AccountPortal 
-        userName={userName}
-        userEmail={userEmail}
+        userName={userName || 'User'}
+        userEmail={userEmail || ''}
         subscriptionStatus={subscriptionStatus}
         trialDaysRemaining={trialDaysRemaining}
         onLogout={handleLogout}
         onManageBilling={handleManageBilling}
         onRefreshStatus={async () => {
           console.log('[App] AccountRoute: Manual profile refresh triggered');
-          const status = await refreshProfile();
-          console.log('[App] AccountRoute: Manual refresh complete, status:', status);
-          return status;
+          try {
+            const status = await refreshProfile();
+            console.log('[App] AccountRoute: Manual refresh complete, status:', status);
+            return status;
+          } catch (err) {
+            console.error('[App] AccountRoute: Error in manual refresh:', err);
+            return subscriptionStatus;
+          }
         }}
         preferences={preferences}
         onStartPreferences={() => setShowPrefsWizard(true)}
@@ -492,23 +512,37 @@ function App() {
         <Route 
           path="/account" 
           element={
-            isLoggedIn ? (
-              showPrefsWizard ? (
-                <OnboardingChat
-                userName={userName}
-                  initialPreferences={preferences}
-                  onComplete={(p) => {
-                    void handlePreferencesComplete(p);
-                    setShowPrefsWizard(false);
-                  }}
-                  onExit={() => setShowPrefsWizard(false)}
-              />
-              ) : (
-                <AccountRoute />
-              )
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            (() => {
+              console.log('[App] Account route check:', { isLoggedIn, authReady, showPrefsWizard });
+              if (!authReady) {
+                return (
+                  <div className="min-h-screen flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#556B2F] mx-auto mb-4"></div>
+                      <p className="text-gray-600">Initializing...</p>
+                    </div>
+                  </div>
+                );
+              }
+              if (!isLoggedIn) {
+                console.log('[App] Not logged in, redirecting to login');
+                return <Navigate to="/login" replace />;
+              }
+              if (showPrefsWizard) {
+                return (
+                  <OnboardingChat
+                    userName={userName}
+                    initialPreferences={preferences}
+                    onComplete={(p) => {
+                      void handlePreferencesComplete(p);
+                      setShowPrefsWizard(false);
+                    }}
+                    onExit={() => setShowPrefsWizard(false)}
+                  />
+                );
+              }
+              return <AccountRoute />;
+            })()
           } 
         />
         <Route 
