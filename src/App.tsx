@@ -222,22 +222,59 @@ function App() {
         });
       }
 
-      // If no result, try by email
+      // If no result, try by email (case-insensitive)
       if (profile.error || !profile.data) {
         const email = session.user.email ?? '';
         if (email) {
           console.log('[App] refreshProfile: Trying fallback query by email:', email);
+          // Try exact match first
           profile = await supabase
             .from('users')
             .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
             .eq('email', email)
             .maybeSingle();
           
+          // If still no result, try case-insensitive (PostgreSQL ilike)
+          if (!profile.data && !profile.error) {
+            console.log('[App] refreshProfile: Trying case-insensitive email query');
+            const caseInsensitive = await supabase
+              .from('users')
+              .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+              .ilike('email', email)
+              .maybeSingle();
+            
+            if (caseInsensitive.data) {
+              profile = caseInsensitive;
+            }
+          }
+          
           console.log('[App] refreshProfile: Query by email result:', {
             error: profile.error,
             hasData: !!profile.data,
             data: profile.data
           });
+          
+          // If we found a profile by email but auth_user_id doesn't match, update it
+          if (profile.data && profile.data.auth_user_id !== session.user.id) {
+            console.log('[App] refreshProfile: Found profile by email but auth_user_id mismatch. Updating auth_user_id...', {
+              currentAuthUserId: profile.data.auth_user_id,
+              newAuthUserId: session.user.id
+            });
+            
+            const updateResult = await supabase
+              .from('users')
+              .update({ auth_user_id: session.user.id })
+              .eq('id', profile.data.id)
+              .select()
+              .maybeSingle();
+            
+            if (updateResult.data) {
+              console.log('[App] refreshProfile: Successfully updated auth_user_id');
+              profile = { data: updateResult.data, error: null };
+            } else if (updateResult.error) {
+              console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
+            }
+          }
         }
       }
 
