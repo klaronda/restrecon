@@ -64,10 +64,29 @@ function App() {
   };
 
   const applyProfile = (profile: AuthProfile | null, emailFromSession?: string | null) => {
+    console.log('[App] applyProfile called with:', {
+      profile,
+      emailFromSession,
+      hasFirstName: !!profile?.first_name,
+      hasLastName: !!profile?.last_name,
+      plan: profile?.plan,
+      planType: typeof profile?.plan
+    });
+    
     const email = profile?.email ?? emailFromSession ?? '';
     const emailName = email ? email.split('@')[0] : '';
     const parts = [profile?.first_name, profile?.last_name].filter(Boolean);
     const name = parts.join(' ').trim() || emailName || 'Recon teammate';
+    
+    console.log('[App] Setting user data:', {
+      name,
+      email,
+      plan: profile?.plan,
+      normalizedPlan: normalizePlan(profile?.plan),
+      firstName: profile?.first_name,
+      lastName: profile?.last_name
+    });
+    
     setUserName(name);
     setUserEmail(email);
     setSubscriptionStatus(normalizePlan(profile?.plan));
@@ -152,20 +171,30 @@ function App() {
     profileLoadingRef.current = true;
     const { data } = await supabase.auth.getSession();
     const session = data.session;
-    if (session?.user) {
-      const profile = await supabase
-        .from('users')
-        .select('first_name, last_name, email, plan, trial_ends_at')
-        .eq('auth_user_id', session.user.id)
-        .maybeSingle();
+      if (session?.user) {
+        console.log('[App] refreshProfile: Fetching profile for user:', session.user.id);
+        const profile = await supabase
+          .from('users')
+          .select('first_name, last_name, email, plan, trial_ends_at')
+          .eq('auth_user_id', session.user.id)
+          .maybeSingle();
 
-      if (profile.error) {
-        console.error('Profile fetch error', profile.error);
-        profileLoadingRef.current = false;
-        return subscriptionStatus;
-      }
+        if (profile.error) {
+          console.error('[App] refreshProfile: Profile fetch error', profile.error);
+          profileLoadingRef.current = false;
+          return subscriptionStatus;
+        }
 
-      if (!profile.data) {
+        console.log('[App] refreshProfile: Profile data from database:', {
+          data: profile.data,
+          plan: profile.data?.plan,
+          planType: typeof profile.data?.plan,
+          firstName: profile.data?.first_name,
+          lastName: profile.data?.last_name,
+          email: profile.data?.email
+        });
+
+        if (!profile.data) {
         // Fallback: try matching by email in case the auth_user_id differs
         const email = session.user.email ?? '';
         if (email) {
@@ -446,15 +475,24 @@ function App() {
         
         if (session?.user && isMounted) {
           try {
+            console.log('[App] Fetching profile for user:', session.user.id);
             const profile = await supabase
               .from('users')
               .select('first_name, last_name, email, plan, trial_ends_at')
               .eq('auth_user_id', session.user.id)
               .maybeSingle();
+            
             if (profile.error) {
               console.error('[App] Profile fetch error on init:', profile.error);
             } else {
-              console.log('[App] Applying initial profile:', { plan: profile.data?.plan, email: profile.data?.email });
+              console.log('[App] Profile fetched from database:', {
+                data: profile.data,
+                hasData: !!profile.data,
+                plan: profile.data?.plan,
+                firstName: profile.data?.first_name,
+                lastName: profile.data?.last_name,
+                email: profile.data?.email
+              });
               applyProfile(profile.data, session.user.email);
             }
           } catch (profileErr) {
@@ -470,6 +508,7 @@ function App() {
           console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
           if (session?.user) {
             try {
+              console.log('[App] Auth state change - fetching profile for user:', session.user.id);
               const profile = await supabase
                 .from('users')
                 .select('first_name, last_name, email, plan, trial_ends_at')
@@ -479,7 +518,13 @@ function App() {
                 console.error('[App] Profile fetch error on auth state change:', profile.error);
                 resetAuthState();
               } else {
-                console.log('[App] Applying profile from auth state change:', { plan: profile.data?.plan, email: profile.data?.email });
+                console.log('[App] Profile fetched on auth state change:', {
+                  data: profile.data,
+                  plan: profile.data?.plan,
+                  firstName: profile.data?.first_name,
+                  lastName: profile.data?.last_name,
+                  email: profile.data?.email
+                });
                 applyProfile(profile.data, session.user.email);
               }
             } catch (profileErr) {
