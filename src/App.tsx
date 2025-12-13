@@ -167,68 +167,124 @@ function App() {
   };
 
   const refreshProfile = async (): Promise<SubscriptionStatus> => {
-    if (profileLoadingRef.current) return subscriptionStatus;
+    if (profileLoadingRef.current) {
+      console.log('[App] refreshProfile: Already loading, skipping');
+      return subscriptionStatus;
+    }
     profileLoadingRef.current = true;
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-      if (session?.user) {
-        console.log('[App] refreshProfile: Fetching profile for user:', session.user.id);
-        const profile = await supabase
-          .from('users')
-          .select('first_name, last_name, email, plan, trial_ends_at')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle();
-
-        if (profile.error) {
-          console.error('[App] refreshProfile: Profile fetch error', profile.error);
-          profileLoadingRef.current = false;
-          return subscriptionStatus;
-        }
-
-        console.log('[App] refreshProfile: Profile data from database:', {
-          data: profile.data,
-          plan: profile.data?.plan,
-          planType: typeof profile.data?.plan,
-          firstName: profile.data?.first_name,
-          lastName: profile.data?.last_name,
-          email: profile.data?.email
-        });
-
-        if (!profile.data) {
-        // Fallback: try matching by email in case the auth_user_id differs
-        const email = session.user.email ?? '';
-        if (email) {
-          const byEmail = await supabase
-            .from('users')
-            .select('first_name, last_name, email, plan, trial_ends_at')
-            .eq('email', email)
-            .maybeSingle();
-          if (byEmail.error) {
-            console.error('Profile fetch by email error', byEmail.error);
-            profileLoadingRef.current = false;
-            return subscriptionStatus;
-          }
-          if (byEmail.data) {
-            applyProfile(byEmail.data, session.user.email);
-            profileLoadedRef.current = true;
-            profileLoadingRef.current = false;
-            return normalizePlan(byEmail.data.plan);
-          }
-        }
-        console.warn('No profile row for user', session.user.id);
+    
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('[App] refreshProfile: Session error', sessionError);
         profileLoadingRef.current = false;
         return subscriptionStatus;
       }
+      
+      const session = data.session;
+      if (!session?.user) {
+        console.log('[App] refreshProfile: No session or user');
+        resetAuthState();
+        profileLoadingRef.current = false;
+        return 'none';
+      }
+
+      console.log('[App] refreshProfile: Fetching profile for user:', {
+        userId: session.user.id,
+        email: session.user.email
+      });
+      
+      // Try by auth_user_id first
+      let profile = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      console.log('[App] refreshProfile: Query by auth_user_id result:', {
+        error: profile.error,
+        hasData: !!profile.data,
+        data: profile.data
+      });
+
+      // If no result, try by email
+      if (profile.error || !profile.data) {
+        const email = session.user.email ?? '';
+        if (email) {
+          console.log('[App] refreshProfile: Trying fallback query by email:', email);
+          profile = await supabase
+            .from('users')
+            .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+            .eq('email', email)
+            .maybeSingle();
+          
+          console.log('[App] refreshProfile: Query by email result:', {
+            error: profile.error,
+            hasData: !!profile.data,
+            data: profile.data
+          });
+        }
+      }
+
+      // If still no result, try by id matching user.id
+      if (profile.error || !profile.data) {
+        console.log('[App] refreshProfile: Trying fallback query by id:', session.user.id);
+        profile = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        
+        console.log('[App] refreshProfile: Query by id result:', {
+          error: profile.error,
+          hasData: !!profile.data,
+          data: profile.data
+        });
+      }
+
+      if (profile.error) {
+        console.error('[App] refreshProfile: All profile queries failed', profile.error);
+        profileLoadingRef.current = false;
+        return subscriptionStatus;
+      }
+
+      if (!profile.data) {
+        console.warn('[App] refreshProfile: No profile found in database for user:', {
+          userId: session.user.id,
+          email: session.user.email
+        });
+        profileLoadingRef.current = false;
+        return subscriptionStatus;
+      }
+
+      console.log('[App] refreshProfile: Successfully fetched profile:', {
+        id: profile.data.id,
+        auth_user_id: profile.data.auth_user_id,
+        plan: profile.data.plan,
+        planType: typeof profile.data.plan,
+        firstName: profile.data.first_name,
+        lastName: profile.data.last_name,
+        email: profile.data.email,
+        trial_ends_at: profile.data.trial_ends_at
+      });
 
       applyProfile(profile.data, session.user.email);
       void loadPreferences(); // keep prefs current
       profileLoadedRef.current = true;
       profileLoadingRef.current = false;
-      return normalizePlan(profile.data.plan);
+      
+      const normalizedPlan = normalizePlan(profile.data.plan);
+      console.log('[App] refreshProfile: Normalized plan:', {
+        raw: profile.data.plan,
+        normalized: normalizedPlan
+      });
+      
+      return normalizedPlan;
+    } catch (err) {
+      console.error('[App] refreshProfile: Unexpected error', err);
+      profileLoadingRef.current = false;
+      return subscriptionStatus;
     }
-    resetAuthState();
-    profileLoadingRef.current = false;
-    return 'none';
   };
 
   const loadPreferences = async () => {
