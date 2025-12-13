@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock } from 'lucide-react';
 import { UserPreferences } from '../../services/preferences';
+import { SharedNav } from './shared-nav';
 
 interface AccountPortalProps {
   userName: string;
