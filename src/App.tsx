@@ -253,8 +253,54 @@ function App() {
           userId: session.user.id,
           email: session.user.email
         });
-        profileLoadingRef.current = false;
-        return subscriptionStatus;
+        
+        // Try to create a profile if it doesn't exist
+        console.log('[App] refreshProfile: Attempting to create profile...');
+        try {
+          const createResult = await supabase
+            .from('users')
+            .insert({
+              id: session.user.id,
+              auth_user_id: session.user.id,
+              email: session.user.email ?? null,
+              plan: 'none',
+              trial_ends_at: null,
+              first_name: null,
+              last_name: null,
+            })
+            .select()
+            .maybeSingle();
+          
+          if (createResult.error) {
+            console.error('[App] refreshProfile: Error creating profile:', createResult.error);
+            // If it's a duplicate key error, try fetching again
+            if (createResult.error.code === '23505') {
+              console.log('[App] refreshProfile: Profile already exists (duplicate key), fetching again...');
+              profile = await supabase
+                .from('users')
+                .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              
+              if (profile.data) {
+                console.log('[App] refreshProfile: Successfully fetched after duplicate key error:', profile.data);
+              }
+            } else {
+              profileLoadingRef.current = false;
+              return subscriptionStatus;
+            }
+          } else if (createResult.data) {
+            console.log('[App] refreshProfile: Successfully created new profile:', createResult.data);
+            profile = { data: createResult.data, error: null };
+          } else {
+            profileLoadingRef.current = false;
+            return subscriptionStatus;
+          }
+        } catch (createErr) {
+          console.error('[App] refreshProfile: Error in create profile attempt:', createErr);
+          profileLoadingRef.current = false;
+          return subscriptionStatus;
+        }
       }
 
       console.log('[App] refreshProfile: Successfully fetched profile:', {
