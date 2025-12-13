@@ -203,9 +203,24 @@ function App() {
 
       console.log('[App] refreshProfile: Query by auth_user_id result:', {
         error: profile.error,
+        errorMessage: profile.error?.message,
+        errorCode: profile.error?.code,
         hasData: !!profile.data,
         data: profile.data
       });
+      
+      // Debug: Try to see if there are any users at all (for debugging)
+      if (!profile.data && !profile.error) {
+        const allUsers = await supabase
+          .from('users')
+          .select('id, auth_user_id, email, plan, first_name, last_name')
+          .limit(5);
+        console.log('[App] refreshProfile: Sample users in database (for debugging):', {
+          count: allUsers.data?.length || 0,
+          users: allUsers.data,
+          error: allUsers.error
+        });
+      }
 
       // If no result, try by email
       if (profile.error || !profile.data) {
