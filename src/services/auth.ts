@@ -103,7 +103,13 @@ export async function fetchProfile(userId: string): Promise<AuthProfile | null> 
     .select('first_name, last_name, email, plan, trial_ends_at')
     .eq('auth_user_id', userId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    console.error('[auth] Error fetching profile:', error);
+    throw error;
+  }
+  if (data) {
+    console.log('[auth] Fetched profile:', { userId, plan: data.plan, email: data.email });
+  }
   return data;
 }
 

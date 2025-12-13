@@ -13,7 +13,7 @@ import { FAQPage } from './components/website/faq-page';
 import { PrivacyPolicyPage } from './components/website/privacy-policy-page';
 import { TermsOfServicePage } from './components/website/terms-of-service-page';
 import { supabase } from './lib/supabaseClient';
-import { AuthProfile, signInWithProfile, signOut, signUpWithProfile } from './services/auth';
+import { AuthProfile, signInWithProfile, signOut, signUpWithProfile, fetchProfile } from './services/auth';
 import { openCustomerPortal } from './services/payments';
 import { fetchPreferences, savePreferences, generateRecap, UserPreferences } from './services/preferences';
 import { OnboardingChat } from './components/onboarding-chat';
@@ -36,9 +36,15 @@ function App() {
   const prefsLoadingRef = useRef(false);
 
   const normalizePlan = (plan?: string | null): SubscriptionStatus => {
-    if (plan === 'pro' || plan === 'active') return 'active';
-    if (plan === 'trial') return 'trial';
-    if (plan === 'trial_expired') return 'trial_expired';
+    if (!plan) return 'none';
+    const planLower = plan.toLowerCase();
+    if (planLower === 'pro' || planLower === 'active') {
+      console.log('[App] Normalized plan to active:', plan);
+      return 'active';
+    }
+    if (planLower === 'trial') return 'trial';
+    if (planLower === 'trial_expired' || planLower === 'trialexpired') return 'trial_expired';
+    console.log('[App] Unknown plan value, defaulting to none:', plan);
     return 'none';
   };
 
@@ -72,18 +78,47 @@ function App() {
   const handleLogin = async (email: string, password: string) => {
     const profile = await signInWithProfile(email, password);
     applyProfile(profile, email);
+    
+    // Refresh profile from database to ensure we have the latest plan status
+    // This is important in case the plan was updated (e.g., upgraded to pro)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        const freshProfile = await fetchProfile(sessionData.session.user.id);
+        if (freshProfile) {
+          console.log('[App] Refreshed profile after login', { plan: freshProfile.plan });
+          applyProfile(freshProfile, sessionData.session.user.email);
+        }
+      }
+    } catch (err) {
+      console.warn('[App] Failed to refresh profile after login:', err);
+      // Continue with the profile from signInWithProfile
+    }
   };
 
   const handleLogout = async () => {
     try {
+      console.log('[App] Starting logout...');
       await signOut();
+      console.log('[App] SignOut completed');
     } catch (err) {
-      console.error('Logout failed', err);
-    } finally {
-      resetAuthState();
-      if (typeof window !== 'undefined') {
-        window.location.assign('/');
-      }
+      console.error('[App] Logout failed', err);
+      // Continue with logout even if signOut fails
+    }
+    
+    // Always reset state and redirect, even if signOut had errors
+    resetAuthState();
+    
+    // Clear any stored session data
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch (err) {
+      console.warn('[App] Additional signOut attempt failed:', err);
+    }
+    
+    if (typeof window !== 'undefined') {
+      // Use replace to prevent back button from going back to logged-in state
+      window.location.replace('/');
     }
   };
 
@@ -382,8 +417,9 @@ function App() {
         }
       }
 
-      const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!isMounted) return;
+        console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
         if (session?.user) {
           const profile = await supabase
             .from('users')
@@ -391,12 +427,14 @@ function App() {
             .eq('auth_user_id', session.user.id)
             .maybeSingle();
           if (profile.error) {
-            console.error(profile.error);
+            console.error('[App] Profile fetch error on auth state change:', profile.error);
             resetAuthState();
           } else {
+            console.log('[App] Applying profile from auth state change:', { plan: profile.data?.plan, email: profile.data?.email });
             applyProfile(profile.data, session.user.email);
           }
         } else {
+          console.log('[App] No session, resetting auth state');
           resetAuthState();
         }
       });
