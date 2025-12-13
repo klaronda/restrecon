@@ -438,13 +438,7 @@ function App() {
         />
         <Route 
           path="/login" 
-          element={
-            isLoggedIn ? (
-              <Navigate to="/account" replace />
-            ) : (
-              <LoginPage onLogin={handleLogin} />
-            )
-          } 
+          element={<LoginPage onLogin={handleLogin} />}
         />
 
         {/* Protected Routes */}

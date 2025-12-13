@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void> | void;
@@ -8,11 +9,67 @@ interface LoginPageProps {
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // Check if this is an extension login
+  const isExtension = searchParams.get('extension') === 'true';
+  const redirectUrl = searchParams.get('redirect');
+  const stateToken = searchParams.get('state');
+
+  // Check if user is already logged in (for both extension and normal flow)
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (session && !sessionError) {
+          // User is already logged in
+          if (isExtension && redirectUrl) {
+            // Extension flow: redirect to extension callback
+            console.log('[login-page] User already logged in, redirecting to extension', {
+              hasAccessToken: !!session.access_token,
+              hasRefreshToken: !!session.refresh_token,
+              redirectUrl
+            });
+            try {
+              const callbackUrl = new URL(redirectUrl);
+              callbackUrl.searchParams.set('access_token', session.access_token);
+              callbackUrl.searchParams.set('refresh_token', session.refresh_token);
+              if (stateToken) {
+                callbackUrl.searchParams.set('state', stateToken);
+              }
+              const finalUrl = callbackUrl.toString();
+              console.log('[login-page] Redirecting to extension:', finalUrl.substring(0, 100) + '...');
+              window.location.href = finalUrl;
+              return; // Don't set checkingSession to false, we're redirecting
+            } catch (urlErr) {
+              console.error('[login-page] Error constructing callback URL for existing session:', urlErr);
+              setCheckingSession(false);
+            }
+          } else {
+            // Normal flow: redirect to account page
+            console.log('[login-page] User already logged in, redirecting to account');
+            navigate('/account', { replace: true });
+            return; // Don't set checkingSession to false, we're redirecting
+          }
+        } else {
+          // Not logged in, show login form
+          setCheckingSession(false);
+        }
+      } catch (err) {
+        console.error('[login-page] Error checking session:', err);
+        setCheckingSession(false);
+      }
+    };
+    
+    checkExistingSession();
+  }, [isExtension, redirectUrl, stateToken, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -20,6 +77,71 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     if (!email || !password) return;
     try {
       setIsLoading(true);
+      
+      // If extension login, sign in directly to get session immediately
+      if (isExtension && redirectUrl) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (signInError) {
+          setError(signInError.message || 'Login failed. Check your credentials and try again.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Get session from sign-in response
+        const session = signInData?.session;
+        if (!session) {
+          setError('Login succeeded but session was not created. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Also call onLogin to update app state
+        try {
+          await onLogin(email, password);
+        } catch (err) {
+          // Ignore errors from onLogin - we already have the session
+          console.warn('[login-page] onLogin had error but continuing with extension redirect:', err);
+        }
+        
+        // Redirect to extension callback with tokens
+        console.log('[login-page] Redirecting to extension callback', { 
+          hasAccessToken: !!session.access_token,
+          hasRefreshToken: !!session.refresh_token,
+          accessTokenLength: session.access_token?.length || 0,
+          refreshTokenLength: session.refresh_token?.length || 0,
+          redirectUrl 
+        });
+        
+        try {
+          const callbackUrl = new URL(redirectUrl);
+          callbackUrl.searchParams.set('access_token', session.access_token);
+          callbackUrl.searchParams.set('refresh_token', session.refresh_token);
+          if (stateToken) {
+            callbackUrl.searchParams.set('state', stateToken);
+          }
+          
+          const finalUrl = callbackUrl.toString();
+          console.log('[login-page] Final callback URL', { 
+            finalUrl,
+            urlLength: finalUrl.length,
+            hasAccessToken: callbackUrl.searchParams.has('access_token'),
+            hasRefreshToken: callbackUrl.searchParams.has('refresh_token')
+          });
+          
+          window.location.href = finalUrl;
+        } catch (urlErr) {
+          console.error('[login-page] Error constructing callback URL:', urlErr);
+          setError('Failed to construct callback URL. Please try again.');
+          setIsLoading(false);
+        }
+        return;
+      }
+      
+      // Normal login flow (not extension)
       await onLogin(email, password);
       navigate('/account');
     } catch (err: any) {
@@ -28,6 +150,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#556B2F]/5 via-white to-[#D6C9A2]/10 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#556B2F] mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#556B2F]/5 via-white to-[#D6C9A2]/10 flex items-center justify-center p-6">
@@ -42,7 +176,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             />
             <span className="text-gray-900 text-2xl">NestRecon</span>
           </Link>
-          <p className="text-gray-600">Welcome back, Commander</p>
+          <p className="text-gray-600">
+            {isExtension ? 'Sign in to unlock your NestRecon extension' : 'Welcome back, Commander'}
+          </p>
         </div>
 
         {/* Card */}
