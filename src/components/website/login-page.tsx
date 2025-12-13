@@ -24,9 +24,27 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   // Check if user is already logged in (for both extension and normal flow)
   useEffect(() => {
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    
     const checkExistingSession = async () => {
       try {
+        // Add timeout fallback to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('[login-page] Session check timeout, showing login form');
+            setCheckingSession(false);
+          }
+        }, 3000);
+        
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        if (!isMounted) return;
         
         if (session && !sessionError) {
           // User is already logged in
@@ -64,11 +82,21 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         }
       } catch (err) {
         console.error('[login-page] Error checking session:', err);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         setCheckingSession(false);
       }
     };
     
     checkExistingSession();
+    
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [isExtension, redirectUrl, stateToken, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -151,13 +179,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   };
 
-  // Show loading state while checking session
+  // Show loading state while checking session (with timeout fallback)
   if (checkingSession) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#556B2F]/5 via-white to-[#D6C9A2]/10 flex items-center justify-center p-6">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#556B2F] mx-auto mb-4"></div>
           <p className="text-gray-600">Checking authentication...</p>
+          <p className="text-gray-400 text-sm mt-2">If this takes too long, please refresh the page</p>
         </div>
       </div>
     );
