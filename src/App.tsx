@@ -227,53 +227,69 @@ function App() {
         const email = session.user.email ?? '';
         if (email) {
           console.log('[App] refreshProfile: Trying fallback query by email:', email);
+          
           // Try exact match first
-          profile = await supabase
+          let emailQuery = await supabase
             .from('users')
             .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
             .eq('email', email)
             .maybeSingle();
           
+          console.log('[App] refreshProfile: Exact email query result:', {
+            error: emailQuery.error,
+            errorMessage: emailQuery.error?.message,
+            errorCode: emailQuery.error?.code,
+            hasData: !!emailQuery.data,
+            data: emailQuery.data
+          });
+          
           // If still no result, try case-insensitive (PostgreSQL ilike)
-          if (!profile.data && !profile.error) {
+          if (!emailQuery.data && !emailQuery.error) {
             console.log('[App] refreshProfile: Trying case-insensitive email query');
-            const caseInsensitive = await supabase
+            emailQuery = await supabase
               .from('users')
               .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
               .ilike('email', email)
               .maybeSingle();
             
-            if (caseInsensitive.data) {
-              profile = caseInsensitive;
-            }
+            console.log('[App] refreshProfile: Case-insensitive email query result:', {
+              error: emailQuery.error,
+              hasData: !!emailQuery.data,
+              data: emailQuery.data
+            });
           }
           
-          console.log('[App] refreshProfile: Query by email result:', {
-            error: profile.error,
-            hasData: !!profile.data,
-            data: profile.data
-          });
-          
-          // If we found a profile by email but auth_user_id doesn't match, update it
-          if (profile.data && profile.data.auth_user_id !== session.user.id) {
-            console.log('[App] refreshProfile: Found profile by email but auth_user_id mismatch. Updating auth_user_id...', {
-              currentAuthUserId: profile.data.auth_user_id,
-              newAuthUserId: session.user.id
-            });
+          // If we got data from email query, use it
+          if (emailQuery.data) {
+            profile = emailQuery;
+            console.log('[App] refreshProfile: Found profile by email!', profile.data);
             
-            const updateResult = await supabase
-              .from('users')
-              .update({ auth_user_id: session.user.id })
-              .eq('id', profile.data.id)
-              .select()
-              .maybeSingle();
-            
-            if (updateResult.data) {
-              console.log('[App] refreshProfile: Successfully updated auth_user_id');
-              profile = { data: updateResult.data, error: null };
-            } else if (updateResult.error) {
-              console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
+            // If auth_user_id doesn't match, update it
+            if (profile.data.auth_user_id !== session.user.id) {
+              console.log('[App] refreshProfile: Found profile by email but auth_user_id mismatch. Updating auth_user_id...', {
+                currentAuthUserId: profile.data.auth_user_id,
+                newAuthUserId: session.user.id,
+                profileId: profile.data.id
+              });
+              
+              const updateResult = await supabase
+                .from('users')
+                .update({ auth_user_id: session.user.id })
+                .eq('id', profile.data.id)
+                .select()
+                .maybeSingle();
+              
+              if (updateResult.data) {
+                console.log('[App] refreshProfile: Successfully updated auth_user_id');
+                profile = { data: updateResult.data, error: null };
+              } else if (updateResult.error) {
+                console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
+                // Continue with the profile data we have, even if update failed
+              }
             }
+          } else if (emailQuery.error) {
+            console.error('[App] refreshProfile: Email query had error:', emailQuery.error);
+            profile = emailQuery;
           }
         }
       }
@@ -307,51 +323,92 @@ function App() {
         });
         
         // Try to create a profile if it doesn't exist
-        console.log('[App] refreshProfile: Attempting to create profile...');
-        try {
-          const createResult = await supabase
-            .from('users')
-            .insert({
-              id: session.user.id,
-              auth_user_id: session.user.id,
-              email: session.user.email ?? null,
-              plan: 'none',
-              trial_ends_at: null,
-              first_name: null,
-              last_name: null,
-            })
-            .select()
-            .maybeSingle();
+        // But first, let's try one more time to find by email with more logging
+        console.log('[App] refreshProfile: No profile found, attempting final email search...');
+        const finalEmailSearch = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', session.user.email ?? '')
+          .maybeSingle();
+        
+        console.log('[App] refreshProfile: Final email search result:', {
+          error: finalEmailSearch.error,
+          errorDetails: finalEmailSearch.error ? {
+            message: finalEmailSearch.error.message,
+            code: finalEmailSearch.error.code,
+            details: finalEmailSearch.error.details,
+            hint: finalEmailSearch.error.hint
+          } : null,
+          hasData: !!finalEmailSearch.data,
+          data: finalEmailSearch.data
+        });
+        
+        if (finalEmailSearch.data) {
+          console.log('[App] refreshProfile: Found profile in final search!', finalEmailSearch.data);
+          profile = finalEmailSearch;
           
-          if (createResult.error) {
-            console.error('[App] refreshProfile: Error creating profile:', createResult.error);
-            // If it's a duplicate key error, try fetching again
-            if (createResult.error.code === '23505') {
-              console.log('[App] refreshProfile: Profile already exists (duplicate key), fetching again...');
-              profile = await supabase
-                .from('users')
-                .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-                .eq('id', session.user.id)
-                .maybeSingle();
-              
-              if (profile.data) {
-                console.log('[App] refreshProfile: Successfully fetched after duplicate key error:', profile.data);
+          // Update auth_user_id if needed
+          if (profile.data.auth_user_id !== session.user.id) {
+            const updateResult = await supabase
+              .from('users')
+              .update({ auth_user_id: session.user.id })
+              .eq('id', profile.data.id)
+              .select()
+              .maybeSingle();
+            
+            if (updateResult.data) {
+              profile = { data: updateResult.data, error: null };
+            }
+          }
+        } else {
+          // Only create if we truly don't have a profile
+          console.log('[App] refreshProfile: No profile found, attempting to create...');
+          try {
+            // Try 'trial' instead of 'none' as it might be a valid plan value
+            const createResult = await supabase
+              .from('users')
+              .insert({
+                id: session.user.id,
+                auth_user_id: session.user.id,
+                email: session.user.email ?? null,
+                plan: 'trial', // Changed from 'none' to 'trial'
+                trial_ends_at: null,
+                first_name: null,
+                last_name: null,
+              })
+              .select()
+              .maybeSingle();
+            
+            if (createResult.error) {
+              console.error('[App] refreshProfile: Error creating profile:', createResult.error);
+              // If it's a duplicate key error, try fetching again
+              if (createResult.error.code === '23505') {
+                console.log('[App] refreshProfile: Profile already exists (duplicate key), fetching again...');
+                profile = await supabase
+                  .from('users')
+                  .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+                  .eq('id', session.user.id)
+                  .maybeSingle();
+                
+                if (profile.data) {
+                  console.log('[App] refreshProfile: Successfully fetched after duplicate key error:', profile.data);
+                }
+              } else {
+                profileLoadingRef.current = false;
+                return subscriptionStatus;
               }
+            } else if (createResult.data) {
+              console.log('[App] refreshProfile: Successfully created new profile:', createResult.data);
+              profile = { data: createResult.data, error: null };
             } else {
               profileLoadingRef.current = false;
               return subscriptionStatus;
             }
-          } else if (createResult.data) {
-            console.log('[App] refreshProfile: Successfully created new profile:', createResult.data);
-            profile = { data: createResult.data, error: null };
-          } else {
+          } catch (createErr) {
+            console.error('[App] refreshProfile: Error in create profile attempt:', createErr);
             profileLoadingRef.current = false;
             return subscriptionStatus;
           }
-        } catch (createErr) {
-          console.error('[App] refreshProfile: Error in create profile attempt:', createErr);
-          profileLoadingRef.current = false;
-          return subscriptionStatus;
         }
       }
 
