@@ -38,13 +38,9 @@ function App() {
   const normalizePlan = (plan?: string | null): SubscriptionStatus => {
     if (!plan) return 'none';
     const planLower = plan.toLowerCase();
-    if (planLower === 'pro' || planLower === 'active') {
-      console.log('[App] Normalized plan to active:', plan);
-      return 'active';
-    }
+    if (planLower === 'pro' || planLower === 'active') return 'active';
     if (planLower === 'trial') return 'trial';
     if (planLower === 'trial_expired' || planLower === 'trialexpired') return 'trial_expired';
-    console.log('[App] Unknown plan value, defaulting to none:', plan);
     return 'none';
   };
 
@@ -64,28 +60,10 @@ function App() {
   };
 
   const applyProfile = (profile: AuthProfile | null, emailFromSession?: string | null) => {
-    console.log('[App] applyProfile called with:', {
-      profile,
-      emailFromSession,
-      hasFirstName: !!profile?.first_name,
-      hasLastName: !!profile?.last_name,
-      plan: profile?.plan,
-      planType: typeof profile?.plan
-    });
-    
     const email = profile?.email ?? emailFromSession ?? '';
     const emailName = email ? email.split('@')[0] : '';
     const parts = [profile?.first_name, profile?.last_name].filter(Boolean);
     const name = parts.join(' ').trim() || emailName || 'Recon teammate';
-    
-    console.log('[App] Setting user data:', {
-      name,
-      email,
-      plan: profile?.plan,
-      normalizedPlan: normalizePlan(profile?.plan),
-      firstName: profile?.first_name,
-      lastName: profile?.last_name
-    });
     
     setUserName(name);
     setUserEmail(email);
@@ -95,79 +73,32 @@ function App() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    try {
-      console.log('[App] handleLogin: Starting login for', email);
-      
-      // Sign in and get profile
-      const profile = await signInWithProfile(email, password);
-      if (!profile) {
-        throw new Error('Login failed: No profile returned');
+    const profile = await signInWithProfile(email, password);
+    if (!profile) {
+      throw new Error('Login failed: No profile returned');
+    }
+    
+    applyProfile(profile, email);
+    
+    // Refresh to get latest plan status
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) {
+      const freshProfile = await fetchProfile(sessionData.session.user.id);
+      if (freshProfile) {
+        applyProfile(freshProfile, sessionData.session.user.email);
       }
-      
-      console.log('[App] handleLogin: Profile received', { 
-        hasProfile: !!profile,
-        plan: profile?.plan,
-        email: profile?.email 
-      });
-      
-      // Verify session exists
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session) {
-        console.error('[App] handleLogin: No session after sign in', sessionError);
-        throw new Error('Login failed: Session not established');
-      }
-      
-      console.log('[App] handleLogin: Session verified', { 
-        userId: sessionData.session.user.id,
-        email: sessionData.session.user.email 
-      });
-      
-      // Apply profile
-      applyProfile(profile, email);
-      
-      // Refresh profile from database to ensure we have the latest plan status
-      // This is important in case the plan was updated (e.g., upgraded to pro)
-      try {
-        if (sessionData?.session?.user) {
-          const freshProfile = await fetchProfile(sessionData.session.user.id);
-          if (freshProfile) {
-            console.log('[App] handleLogin: Refreshed profile after login', { plan: freshProfile.plan });
-            applyProfile(freshProfile, sessionData.session.user.email);
-          }
-        }
-      } catch (err) {
-        console.warn('[App] handleLogin: Failed to refresh profile after login:', err);
-        // Continue with the profile from signInWithProfile
-      }
-      
-      console.log('[App] handleLogin: Login completed successfully');
-    } catch (err) {
-      console.error('[App] handleLogin: Error during login', err);
-      throw err; // Re-throw to let caller handle
     }
   };
 
   const handleLogout = async () => {
-    console.log('[App] handleLogout called');
-    
-    // Always reset state first
     resetAuthState();
-    console.log('[App] Auth state reset');
-    
-    // Try to sign out (but don't block on errors)
     try {
       await signOut();
-      console.log('[App] SignOut completed');
     } catch (err) {
-      console.error('[App] SignOut error (continuing anyway):', err);
+      // Continue anyway
     }
-    
-    // Always redirect, even if signOut failed
     if (typeof window !== 'undefined') {
-      console.log('[App] Redirecting to home page...');
       window.location.href = '/';
-    } else {
-      console.error('[App] window is undefined, cannot redirect');
     }
   };
 
@@ -197,317 +128,36 @@ function App() {
   };
 
   const refreshProfile = async (): Promise<SubscriptionStatus> => {
-    if (profileLoadingRef.current) {
-      console.log('[App] refreshProfile: Already loading, skipping');
-      return subscriptionStatus;
-    }
+    if (profileLoadingRef.current) return subscriptionStatus;
     profileLoadingRef.current = true;
     
     try {
       const { data, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error('[App] refreshProfile: Session error', sessionError);
+      if (sessionError || !data.session?.user) {
+        if (!data.session?.user) resetAuthState();
         profileLoadingRef.current = false;
-        return subscriptionStatus;
+        return data.session?.user ? subscriptionStatus : 'none';
       }
       
       const session = data.session;
-      if (!session?.user) {
-        console.log('[App] refreshProfile: No session or user');
-        resetAuthState();
-        profileLoadingRef.current = false;
-        return 'none';
-      }
-
-      console.log('[App] refreshProfile: Fetching profile for user:', {
-        userId: session.user.id,
-        email: session.user.email
-      });
       
-      // Try by auth_user_id first
-      let profile = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-        .eq('auth_user_id', session.user.id)
-        .maybeSingle();
-
-      console.log('[App] refreshProfile: Query by auth_user_id result:', {
-        error: profile.error,
-        errorMessage: profile.error?.message,
-        errorCode: profile.error?.code,
-        hasData: !!profile.data,
-        data: profile.data
-      });
+      // Use ensureUserProfile which handles fetching, fallback by email, and creation
+      const profile = await ensureUserProfile(session.user.id, session.user.email);
       
-      // Debug: Try to see if there are any users at all (for debugging)
-      if (!profile.data && !profile.error) {
-        const allUsers = await supabase
-          .from('users')
-          .select('id, auth_user_id, email, plan, first_name, last_name')
-          .limit(5);
-        console.log('[App] refreshProfile: Sample users in database (for debugging):', {
-          count: allUsers.data?.length || 0,
-          users: allUsers.data,
-          error: allUsers.error
-        });
-      }
-
-      // If no result, try by email (case-insensitive)
-      if (profile.error || !profile.data) {
-        const email = session.user.email ?? '';
-        if (email) {
-          console.log('[App] refreshProfile: Trying fallback query by email:', email);
-          
-          // Try exact match first
-          let emailQuery = await supabase
-            .from('users')
-            .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-            .eq('email', email)
-            .maybeSingle();
-          
-          console.log('[App] refreshProfile: Exact email query result:', {
-            error: emailQuery.error,
-            errorMessage: emailQuery.error?.message,
-            errorCode: emailQuery.error?.code,
-            hasData: !!emailQuery.data,
-            data: emailQuery.data
-          });
-          
-          // If still no result, try case-insensitive (PostgreSQL ilike)
-          if (!emailQuery.data && !emailQuery.error) {
-            console.log('[App] refreshProfile: Trying case-insensitive email query');
-            emailQuery = await supabase
-              .from('users')
-              .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-              .ilike('email', email)
-              .maybeSingle();
-            
-            console.log('[App] refreshProfile: Case-insensitive email query result:', {
-              error: emailQuery.error,
-              hasData: !!emailQuery.data,
-              data: emailQuery.data
-            });
-          }
-          
-          // If we got data from email query, use it
-          if (emailQuery.data) {
-            profile = emailQuery;
-            console.log('[App] refreshProfile: Found profile by email!', profile.data);
-            
-            // If auth_user_id doesn't match, update it
-            if (profile.data.auth_user_id !== session.user.id) {
-              console.log('[App] refreshProfile: Found profile by email but auth_user_id mismatch. Updating auth_user_id...', {
-                currentAuthUserId: profile.data.auth_user_id,
-                newAuthUserId: session.user.id,
-                profileId: profile.data.id
-              });
-              
-              const updateResult = await supabase
-                .from('users')
-                .update({ auth_user_id: session.user.id })
-                .eq('id', profile.data.id)
-                .select()
-                .maybeSingle();
-              
-              if (updateResult.data) {
-                console.log('[App] refreshProfile: Successfully updated auth_user_id');
-                profile = { data: updateResult.data, error: null };
-              } else if (updateResult.error) {
-                console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
-                // Continue with the profile data we have, even if update failed
-              }
-            }
-          } else if (emailQuery.error) {
-            console.error('[App] refreshProfile: Email query had error:', emailQuery.error);
-            profile = emailQuery;
-          }
-        }
-      }
-
-      // If still no result, try by id matching user.id
-      if (profile.error || !profile.data) {
-        console.log('[App] refreshProfile: Trying fallback query by id:', session.user.id);
-        profile = await supabase
-          .from('users')
-          .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        
-        console.log('[App] refreshProfile: Query by id result:', {
-          error: profile.error,
-          hasData: !!profile.data,
-          data: profile.data
-        });
-      }
-
-      if (profile.error) {
-        console.error('[App] refreshProfile: All profile queries failed', profile.error);
+      if (!profile) {
+        if (import.meta.env.DEV) console.warn('[App] refreshProfile: No profile returned');
         profileLoadingRef.current = false;
         return subscriptionStatus;
       }
-
-      if (!profile.data) {
-        console.warn('[App] refreshProfile: No profile found in database for user:', {
-          userId: session.user.id,
-          email: session.user.email
-        });
-        
-        // Try to create a profile if it doesn't exist
-        // But first, let's try one more time to find by email with more logging
-        console.log('[App] refreshProfile: No profile found, attempting final email search...');
-        
-        // Try multiple query approaches
-        let finalEmailSearch = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', session.user.email ?? '')
-          .maybeSingle();
-        
-        // If that didn't work, try with RPC or different approach
-        if (!finalEmailSearch.data && !finalEmailSearch.error) {
-          // Try selecting all columns explicitly
-          finalEmailSearch = await supabase
-            .from('users')
-            .select('id, auth_user_id, email, first_name, last_name, plan, trial_ends_at, created_at, updated_at')
-            .eq('email', session.user.email ?? '')
-            .maybeSingle();
-        }
-        
-        console.log('[App] refreshProfile: Final email search result:', {
-          error: finalEmailSearch.error,
-          errorDetails: finalEmailSearch.error ? {
-            message: finalEmailSearch.error.message,
-            code: finalEmailSearch.error.code,
-            details: finalEmailSearch.error.details,
-            hint: finalEmailSearch.error.hint
-          } : null,
-          hasData: !!finalEmailSearch.data,
-          data: finalEmailSearch.data
-        });
-        
-        // Check if RLS might be blocking - log a warning
-        if (!finalEmailSearch.data && !finalEmailSearch.error) {
-          console.warn('[App] refreshProfile: Email query returned no data and no error. This might indicate RLS policies are blocking the query.');
-          console.warn('[App] refreshProfile: Profile exists in database but cannot be queried. Check RLS policies for users table.');
-        }
-        
-        if (finalEmailSearch.data) {
-          console.log('[App] refreshProfile: Found profile in final search!', finalEmailSearch.data);
-          profile = finalEmailSearch;
-          
-          // Update auth_user_id if needed
-          if (profile.data.auth_user_id !== session.user.id) {
-            console.log('[App] refreshProfile: Updating auth_user_id to match current session...');
-            const updateResult = await supabase
-              .from('users')
-              .update({ auth_user_id: session.user.id })
-              .eq('id', profile.data.id)
-              .select()
-              .maybeSingle();
-            
-            if (updateResult.data) {
-              console.log('[App] refreshProfile: Successfully updated auth_user_id');
-              profile = { data: updateResult.data, error: null };
-            } else if (updateResult.error) {
-              console.error('[App] refreshProfile: Error updating auth_user_id:', updateResult.error);
-              // Continue with existing profile data even if update fails
-            }
-          }
-        } else {
-          // Only create if we truly don't have a profile
-          console.log('[App] refreshProfile: No profile found, attempting to create...');
-          try {
-            // Try 'trial' instead of 'none' as it might be a valid plan value
-            // Don't set 'id' - let the database auto-generate it
-            const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-            const createResult = await supabase
-              .from('users')
-              .insert({
-                auth_user_id: session.user.id,
-                email: session.user.email ?? null,
-                plan: 'trial',
-                trial_ends_at: trialEndsAt,
-                first_name: null,
-                last_name: null,
-              })
-              .select()
-              .maybeSingle();
-            
-            if (createResult.error) {
-              console.error('[App] refreshProfile: Error creating profile:', createResult.error);
-              // If it's a duplicate key error, try fetching again by auth_user_id
-              if (createResult.error.code === '23505') {
-                console.log('[App] refreshProfile: Profile already exists (duplicate key), fetching again...');
-                profile = await supabase
-                  .from('users')
-                  .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-                  .eq('auth_user_id', session.user.id)
-                  .maybeSingle();
-                
-                if (profile.data) {
-                  console.log('[App] refreshProfile: Successfully fetched after duplicate key error:', profile.data);
-                } else if (profile.error) {
-                  console.error('[App] refreshProfile: Error fetching after duplicate key:', profile.error);
-                } else {
-                  console.warn('[App] refreshProfile: No profile found after duplicate key error - RLS may be blocking query');
-                }
-              } else {
-                profileLoadingRef.current = false;
-                return subscriptionStatus;
-              }
-            } else if (createResult.data) {
-              console.log('[App] refreshProfile: Successfully created new profile:', createResult.data);
-              profile = { data: createResult.data, error: null };
-            } else {
-              profileLoadingRef.current = false;
-              return subscriptionStatus;
-            }
-          } catch (createErr) {
-            console.error('[App] refreshProfile: Error in create profile attempt:', createErr);
-            profileLoadingRef.current = false;
-            return subscriptionStatus;
-          }
-        }
-      }
-
-      // Check if we have valid profile data before accessing properties
-      if (!profile.data) {
-        console.error('[App] refreshProfile: No profile data available after all queries');
-        profileLoadingRef.current = false;
-        return subscriptionStatus;
-      }
-
-      console.log('[App] refreshProfile: Successfully fetched profile:', {
-        id: profile.data.id,
-        auth_user_id: profile.data.auth_user_id,
-        plan: profile.data.plan,
-        planType: typeof profile.data.plan,
-        firstName: profile.data.first_name,
-        lastName: profile.data.last_name,
-        email: profile.data.email,
-        trial_ends_at: profile.data.trial_ends_at
-      });
-
-      // Ensure we have the full profile data before applying
-      if (!profile.data.first_name && !profile.data.last_name) {
-        console.warn('[App] refreshProfile: Profile missing first_name and last_name, but continuing...');
-      }
       
-      applyProfile(profile.data, session.user.email);
-      void loadPreferences(); // keep prefs current
+      applyProfile(profile, session.user.email);
+      void loadPreferences();
       profileLoadedRef.current = true;
       profileLoadingRef.current = false;
       
-      const normalizedPlan = normalizePlan(profile.data.plan);
-      console.log('[App] refreshProfile: Normalized plan:', {
-        raw: profile.data.plan,
-        normalized: normalizedPlan,
-        willShowAs: normalizedPlan === 'active' ? 'pro' : normalizedPlan
-      });
-      
-      return normalizedPlan;
+      return normalizePlan(profile.plan);
     } catch (err) {
-      console.error('[App] refreshProfile: Unexpected error', err);
+      if (import.meta.env.DEV) console.error('[App] refreshProfile error:', err);
       profileLoadingRef.current = false;
       return subscriptionStatus;
     }
@@ -632,60 +282,29 @@ function App() {
 
   const AccountRoute = () => {
     useEffect(() => {
-      // Refresh profile on mount to ensure we have the latest plan status
-      console.log('[App] AccountRoute: Component mounted, refreshing profile');
-      console.log('[App] AccountRoute: Current state', { 
-        isLoggedIn, 
-        userName, 
-        subscriptionStatus,
-        authReady 
-      });
-      
       const refresh = async () => {
         try {
-          // First check if we have a session
           const { data: sessionData } = await supabase.auth.getSession();
-          if (!sessionData?.session) {
-            console.log('[App] AccountRoute: No session, redirecting to login');
-            // Don't redirect here - let the route handler do it
-            return;
-          }
+          if (!sessionData?.session) return;
           
-          // If we have session but no profile data, try to ensure profile exists
+          // Ensure profile exists if we have session but no data
           if (!userName && !userEmail && sessionData.session.user) {
-            console.log('[App] AccountRoute: Session exists but no profile, ensuring profile');
-            try {
-              const profile = await ensureUserProfile(sessionData.session.user.id, sessionData.session.user.email);
-              if (profile) {
-                applyProfile(profile, sessionData.session.user.email);
-                setIsLoggedIn(true);
-                return; // Profile loaded, we're done
-              }
-            } catch (profileErr) {
-              console.error('[App] AccountRoute: Error ensuring profile:', profileErr);
+            const profile = await ensureUserProfile(sessionData.session.user.id, sessionData.session.user.email);
+            if (profile) {
+              applyProfile(profile, sessionData.session.user.email);
+              setIsLoggedIn(true);
+              return;
             }
           }
           
-          // Force refresh by resetting the loading flag
           profileLoadingRef.current = false;
-          const status = await refreshProfile();
-          console.log('[App] AccountRoute: Profile refreshed, status:', status);
+          await refreshProfile();
           
-          // Ensure isLoggedIn is set if we have a session
           if (sessionData.session && !isLoggedIn) {
             setIsLoggedIn(true);
           }
-          
-          // If still showing wrong data, try one more time after a short delay
-          if (userName === 'klaronda' || subscriptionStatus === 'none') {
-            console.log('[App] AccountRoute: Data still incorrect, retrying after delay...');
-            setTimeout(async () => {
-              profileLoadingRef.current = false;
-              await refreshProfile();
-            }, 1000);
-          }
         } catch (err) {
-          console.error('[App] AccountRoute: Error refreshing profile:', err);
+          if (import.meta.env.DEV) console.error('[App] AccountRoute refresh error:', err);
         }
       };
       
@@ -693,7 +312,6 @@ function App() {
       void loadPreferences();
     }, []);
 
-    // Show account page even if some data is missing
     return (
       <AccountPortal 
         userName={userName || 'User'}
@@ -703,13 +321,9 @@ function App() {
         onLogout={handleLogout}
         onManageBilling={handleManageBilling}
         onRefreshStatus={async () => {
-          console.log('[App] AccountRoute: Manual profile refresh triggered');
           try {
-            const status = await refreshProfile();
-            console.log('[App] AccountRoute: Manual refresh complete, status:', status);
-            return status;
-          } catch (err) {
-            console.error('[App] AccountRoute: Error in manual refresh:', err);
+            return await refreshProfile();
+          } catch {
             return subscriptionStatus;
           }
         }}
@@ -821,172 +435,49 @@ function App() {
 
     const initSession = async () => {
       try {
-        console.log('[App] Initializing session...');
-        
-        // Set a timeout to ensure authReady is set even if something hangs
+        // Timeout fallback
         timeoutId = setTimeout(() => {
-          if (isMounted) {
-            console.warn('[App] Auth initialization timeout - setting authReady to true anyway');
-            setAuthReady(true);
-          }
-        }, 5000); // 5 second timeout
+          if (isMounted) setAuthReady(true);
+        }, 5000);
         
         const { data, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('[App] Error getting session:', sessionError);
+          if (import.meta.env.DEV) console.error('[App] Session error:', sessionError.message);
           if (timeoutId) clearTimeout(timeoutId);
-          setAuthReady(true); // Still set ready so app can render
+          setAuthReady(true);
           return;
         }
         
         const session = data.session;
-        console.log('[App] Initial session check:', { hasSession: !!session, userId: session?.user?.id });
         
         if (session?.user && isMounted) {
           try {
-            console.log('[App] Ensuring profile exists for user:', {
-              userId: session.user.id,
-              email: session.user.email ? `${session.user.email.substring(0, 3)}***@${session.user.email.split('@')[1]}` : 'none'
-            });
-            
-            // Use ensureUserProfile which will create a profile if it doesn't exist
-            const profileTimeout = new Promise<AuthProfile | null>((_, reject) => 
-              setTimeout(() => reject(new Error('Profile ensure timeout')), 5000)
-            );
-            
-            let profile: AuthProfile | null = null;
-            try {
-              profile = await Promise.race([
-                ensureUserProfile(session.user.id, session.user.email),
-                profileTimeout
-              ]);
-            } catch (ensureErr: any) {
-              console.error('[App] ensureUserProfile failed, trying fallback query by email', {
-                error: ensureErr?.message,
-                email: session.user.email
-              });
-              
-              // Fallback: try direct query by email
-              if (session.user.email) {
-                try {
-                  const { data: emailProfile, error: emailError } = await supabase
-                    .from('users')
-                    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-                    .eq('email', session.user.email)
-                    .maybeSingle();
-                  
-                  if (emailError) {
-                    console.error('[App] Fallback email query failed', {
-                      error: emailError.message,
-                      errorCode: emailError.code
-                    });
-                  } else if (emailProfile) {
-                    console.log('[App] Fallback email query found profile', {
-                      profileId: emailProfile.id,
-                      authUserIdMatches: emailProfile.auth_user_id === session.user.id
-                    });
-                    
-                    // Update auth_user_id if it doesn't match
-                    if (emailProfile.auth_user_id !== session.user.id) {
-                      console.log('[App] Updating auth_user_id from fallback query');
-                      await supabase
-                        .from('users')
-                        .update({ auth_user_id: session.user.id })
-                        .eq('id', emailProfile.id);
-                      emailProfile.auth_user_id = session.user.id;
-                    }
-                    
-                    profile = emailProfile;
-                  }
-                } catch (fallbackErr) {
-                  console.error('[App] Fallback email query exception:', fallbackErr);
-                }
-              }
-            }
-            
+            const profile = await ensureUserProfile(session.user.id, session.user.email);
             if (profile) {
-              console.log('[App] Profile ensured/loaded:', {
-                hasData: !!profile,
-                plan: profile?.plan,
-                firstName: profile?.first_name,
-                lastName: profile?.last_name,
-                email: profile?.email
-              });
               applyProfile(profile, session.user.email);
-            } else {
-              console.warn('[App] Profile ensure returned null - user will need to log in again');
-              // Don't reset auth state here - let the user try to access account
-              // The account route will handle the redirect if needed
             }
-          } catch (profileErr) {
-            console.error('[App] Error ensuring profile on init:', profileErr);
-            // Continue anyway - don't block the app
+          } catch (err) {
+            if (import.meta.env.DEV) console.error('[App] Profile error on init:', err);
           }
         } else if (!session && isMounted) {
-          console.log('[App] No initial session found');
           resetAuthState();
         }
 
+        // Listen for auth state changes
         const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
           if (!isMounted) return;
-          console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
+          
           if (session?.user) {
             try {
-              console.log('[App] Auth state change - ensuring profile for user:', {
-                userId: session.user.id,
-                email: session.user.email ? `${session.user.email.substring(0, 3)}***@${session.user.email.split('@')[1]}` : 'none'
-              });
-              
-              // Use ensureUserProfile which will create a profile if it doesn't exist
-              let profile: AuthProfile | null = null;
-              try {
-                profile = await ensureUserProfile(session.user.id, session.user.email);
-              } catch (ensureErr: any) {
-                console.error('[App] ensureUserProfile failed in auth state change, trying fallback', {
-                  error: ensureErr?.message
-                });
-                
-                // Fallback: try direct query by email
-                if (session.user.email) {
-                  const { data: emailProfile } = await supabase
-                    .from('users')
-                    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-                    .eq('email', session.user.email)
-                    .maybeSingle();
-                  
-                  if (emailProfile) {
-                    // Update auth_user_id if needed
-                    if (emailProfile.auth_user_id !== session.user.id) {
-                      await supabase
-                        .from('users')
-                        .update({ auth_user_id: session.user.id })
-                        .eq('id', emailProfile.id);
-                      emailProfile.auth_user_id = session.user.id;
-                    }
-                    profile = emailProfile;
-                  }
-                }
-              }
-              
+              const profile = await ensureUserProfile(session.user.id, session.user.email);
               if (profile) {
-                console.log('[App] Profile ensured on auth state change:', {
-                  plan: profile.plan,
-                  firstName: profile.first_name,
-                  lastName: profile.last_name,
-                  email: profile.email
-                });
                 applyProfile(profile, session.user.email);
-              } else {
-                console.warn('[App] Profile ensure returned null on auth state change');
-                // Don't reset auth state - session is valid, profile might be loading
               }
-            } catch (profileErr) {
-              console.error('[App] Error in auth state change handler:', profileErr);
-              // Don't reset auth state on error - might be temporary
+            } catch (err) {
+              if (import.meta.env.DEV) console.error('[App] Profile error on auth change:', err);
             }
           } else {
-            console.log('[App] No session, resetting auth state');
             resetAuthState();
           }
         });
@@ -994,11 +485,10 @@ function App() {
         
         if (timeoutId) clearTimeout(timeoutId);
         setAuthReady(true);
-        console.log('[App] Auth initialization complete, authReady set to true');
       } catch (err) {
-        console.error('[App] Error in initSession:', err);
+        if (import.meta.env.DEV) console.error('[App] initSession error:', err);
         if (timeoutId) clearTimeout(timeoutId);
-        setAuthReady(true); // Still set ready so app can render
+        setAuthReady(true);
       }
     };
 
@@ -1044,16 +534,7 @@ function App() {
           path="/account" 
           element={
             (() => {
-              console.log('[App] Account route check:', { 
-                isLoggedIn, 
-                authReady, 
-                showPrefsWizard,
-                userName,
-                subscriptionStatus 
-              });
-              
               if (!authReady) {
-                console.log('[App] Auth not ready, showing loading');
                 return (
                   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
                     <div className="text-center">
@@ -1064,24 +545,17 @@ function App() {
                 );
               }
               
-              // Check if we have user data (profile was loaded) - this indicates a valid session
-              // This prevents redirect loops when isLoggedIn state hasn't updated yet
               const hasUserData = userName || userEmail;
               
               if (!isLoggedIn && !hasUserData) {
-                console.log('[App] Not logged in and no user data, redirecting to login');
                 return <Navigate to="/login" replace />;
               }
               
-              // If we have user data but isLoggedIn is false, it's likely a state sync issue
-              // Set isLoggedIn to true to fix the state
               if (hasUserData && !isLoggedIn) {
-                console.log('[App] User data exists but isLoggedIn is false, fixing state');
                 setIsLoggedIn(true);
               }
               
               if (showPrefsWizard) {
-                console.log('[App] Showing preferences wizard');
                 return (
                   <OnboardingChat
                     userName={userName}
@@ -1095,26 +569,7 @@ function App() {
                 );
               }
               
-              console.log('[App] Rendering AccountRoute');
-              try {
-                return <AccountRoute />;
-              } catch (err) {
-                console.error('[App] Error rendering AccountRoute:', err);
-                return (
-                  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
-                    <div className="text-center max-w-md">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Account</h1>
-                      <p className="text-gray-600 mb-4">There was an error loading your account page.</p>
-                      <button
-                        onClick={() => window.location.reload()}
-                        className="bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28]"
-                      >
-                        Reload Page
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
+              return <AccountRoute />;
             })()
           } 
         />
