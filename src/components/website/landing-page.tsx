@@ -272,7 +272,7 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
               <img
                 src="https://eqqbsiuqjnqpiiuumanu.supabase.co/storage/v1/object/public/site_assets/homepage/hp_asset_1.png"
                 alt="NestRecon extension side panel overlaying a Zillow listing"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 loading="lazy"
                 width="1200"
                 height="675"

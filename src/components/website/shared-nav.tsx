@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -10,6 +10,7 @@ interface SharedNavProps {
 export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -23,10 +24,42 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (window.location.pathname === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleHashLink = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    if (window.location.pathname === '/') {
+      e.preventDefault();
+      const element = document.querySelector(hash);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      // Navigate to home page with hash, then scroll after navigation
+      e.preventDefault();
+      navigate('/');
+      // Wait for navigation to complete, then scroll
+      setTimeout(() => {
+        const element = document.querySelector(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  };
+
   return (
     <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+        <Link 
+          to="/" 
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          onClick={handleLogoClick}
+        >
           <img 
             src="https://eqqbsiuqjnqpiiuumanu.supabase.co/storage/v1/object/public/site_assets/temp/Rover.svg" 
             alt="Rover" 
@@ -42,8 +75,8 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
         {isDesktop && (
           <div className="flex items-center gap-6 lg:gap-8">
             <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">How It Works</a>
-            <Link to="/pricing" className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</Link>
-            <Link to="/faq" className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</Link>
+            <a href="/#pricing" onClick={(e) => handleHashLink(e, '#pricing')} className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</a>
+            <a href="/#faq" onClick={(e) => handleHashLink(e, '#faq')} className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</a>
             {isLoggedIn ? (
               <>
                 <Link to="/account" className="text-gray-600 hover:text-gray-900 transition-colors">My Account</Link>
@@ -118,20 +151,26 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
                   >
                     How It Works
                   </a>
-                  <Link 
-                    to="/pricing" 
+                  <a 
+                    href="/#pricing" 
                     className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                    onClick={closeMobileMenu}
+                    onClick={(e) => {
+                      closeMobileMenu();
+                      handleHashLink(e, '#pricing');
+                    }}
                   >
                     Pricing
-                  </Link>
-                  <Link 
-                    to="/faq" 
+                  </a>
+                  <a 
+                    href="/#faq" 
                     className="text-gray-900 text-lg hover:text-[#556B2F] transition-colors"
-                    onClick={closeMobileMenu}
+                    onClick={(e) => {
+                      closeMobileMenu();
+                      handleHashLink(e, '#faq');
+                    }}
                   >
                     FAQ
-                  </Link>
+                  </a>
                   {isLoggedIn ? (
                     <>
                       <Link 

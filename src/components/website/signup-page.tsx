@@ -25,7 +25,10 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
       await onSignUp({ firstName, lastName, email, password });
       navigate('/account');
     } catch (err: any) {
-      setError(err?.message || 'Sign up failed. Please try again.');
+      // Error messages are now user-friendly from auth.ts
+      const errorMessage = err?.message || 'Sign up failed. Please try again.';
+      setError(errorMessage);
+      console.error('[signup-page] Sign up error:', err);
     } finally {
       setIsLoading(false);
     }

@@ -418,14 +418,15 @@ function App() {
           console.log('[App] refreshProfile: No profile found, attempting to create...');
           try {
             // Try 'trial' instead of 'none' as it might be a valid plan value
+            // Don't set 'id' - let the database auto-generate it
+            const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
             const createResult = await supabase
               .from('users')
               .insert({
-                id: session.user.id,
                 auth_user_id: session.user.id,
                 email: session.user.email ?? null,
-                plan: 'trial', // Changed from 'none' to 'trial'
-                trial_ends_at: null,
+                plan: 'trial',
+                trial_ends_at: trialEndsAt,
                 first_name: null,
                 last_name: null,
               })
@@ -434,17 +435,21 @@ function App() {
             
             if (createResult.error) {
               console.error('[App] refreshProfile: Error creating profile:', createResult.error);
-              // If it's a duplicate key error, try fetching again
+              // If it's a duplicate key error, try fetching again by auth_user_id
               if (createResult.error.code === '23505') {
                 console.log('[App] refreshProfile: Profile already exists (duplicate key), fetching again...');
                 profile = await supabase
                   .from('users')
                   .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
-                  .eq('id', session.user.id)
+                  .eq('auth_user_id', session.user.id)
                   .maybeSingle();
                 
                 if (profile.data) {
                   console.log('[App] refreshProfile: Successfully fetched after duplicate key error:', profile.data);
+                } else if (profile.error) {
+                  console.error('[App] refreshProfile: Error fetching after duplicate key:', profile.error);
+                } else {
+                  console.warn('[App] refreshProfile: No profile found after duplicate key error - RLS may be blocking query');
                 }
               } else {
                 profileLoadingRef.current = false;
@@ -463,6 +468,13 @@ function App() {
             return subscriptionStatus;
           }
         }
+      }
+
+      // Check if we have valid profile data before accessing properties
+      if (!profile.data) {
+        console.error('[App] refreshProfile: No profile data available after all queries');
+        profileLoadingRef.current = false;
+        return subscriptionStatus;
       }
 
       console.log('[App] refreshProfile: Successfully fetched profile:', {
@@ -502,20 +514,55 @@ function App() {
   };
 
   const loadPreferences = async () => {
-    if (prefsLoadingRef.current || prefsLoadedRef.current) return;
-    prefsLoadingRef.current = true;
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    if (session?.user) {
-      const prefs = await fetchPreferences(session.user.id, session.user.email ?? undefined);
-      if (prefs) {
-        setPreferences(prefs);
-        prefsLoadedRef.current = true;
-      }
-      prefsLoadingRef.current = false;
+    if (prefsLoadingRef.current || prefsLoadedRef.current) {
+      console.log('[App] loadPreferences: Already loading or loaded, skipping');
       return;
     }
-    prefsLoadingRef.current = false;
+    prefsLoadingRef.current = true;
+    
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('[App] loadPreferences: Session error', sessionError);
+        prefsLoadingRef.current = false;
+        return;
+      }
+      
+      const session = data.session;
+      if (!session?.user) {
+        console.log('[App] loadPreferences: No session or user');
+        prefsLoadingRef.current = false;
+        return;
+      }
+
+      console.log('[App] loadPreferences: Fetching preferences for user:', {
+        userId: session.user.id,
+        email: session.user.email
+      });
+
+      // First, get the actual user ID from users table
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, auth_user_id')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      const actualUserId = userData?.id || session.user.id;
+      console.log('[App] loadPreferences: Using user ID:', { authUserId: session.user.id, actualUserId });
+
+      const prefs = await fetchPreferences(actualUserId, session.user.email ?? undefined);
+      if (prefs) {
+        console.log('[App] loadPreferences: Successfully loaded preferences');
+        setPreferences(prefs);
+        prefsLoadedRef.current = true;
+      } else {
+        console.log('[App] loadPreferences: No preferences found');
+      }
+    } catch (err) {
+      console.error('[App] loadPreferences: Unexpected error', err);
+    } finally {
+      prefsLoadingRef.current = false;
+    }
   };
 
   const handlePreferencesComplete = async (prefs: UserPreferences) => {

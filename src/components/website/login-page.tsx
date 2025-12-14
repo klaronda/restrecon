@@ -125,7 +125,21 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         });
         
         if (signInError) {
-          setError(signInError.message || 'Login failed. Check your credentials and try again.');
+          // Use friendly error messages
+          const errorMessage = signInError.message || '';
+          let friendlyMessage = 'Login failed. Please check your credentials and try again.';
+          
+          if (errorMessage.includes('Invalid login credentials') || (errorMessage.includes('invalid') && errorMessage.includes('password'))) {
+            friendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
+          } else if (errorMessage.includes('Email not confirmed') || errorMessage.includes('email not confirmed')) {
+            friendlyMessage = 'Please verify your email address before logging in.';
+          } else if (errorMessage.includes('Too many requests') || errorMessage.includes('rate limit')) {
+            friendlyMessage = 'Too many login attempts. Please wait a moment and try again.';
+          } else if (errorMessage.includes('User not found')) {
+            friendlyMessage = 'No account found with this email address. Please sign up instead.';
+          }
+          
+          setError(friendlyMessage);
           setIsLoading(false);
           return;
         }
@@ -195,7 +209,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       await onLogin(email, password);
       navigate('/account');
     } catch (err: any) {
-      setError(err?.message || 'Login failed. Check your credentials and try again.');
+      // Error messages are now user-friendly from auth.ts
+      const errorMessage = err?.message || 'Login failed. Please check your credentials and try again.';
+      setError(errorMessage);
+      console.error('[login-page] Login error:', err);
     } finally {
       setIsLoading(false);
     }
