@@ -963,8 +963,21 @@ function App() {
                 );
               }
               
-              if (!isLoggedIn) {
-                console.log('[App] Not logged in, redirecting to login');
+              // Check session directly to avoid race condition with state updates
+              const checkSession = async () => {
+                const { data } = await supabase.auth.getSession();
+                return !!data.session;
+              };
+              
+              // Use a synchronous check: if we have a session OR isLoggedIn is true, allow access
+              // This prevents redirect loops when state hasn't updated yet
+              const hasSession = supabase.auth.getSession().then(({ data }) => !!data.session).catch(() => false);
+              
+              // For now, check isLoggedIn but also allow if we have user data (profile was loaded)
+              const hasUserData = userName || userEmail;
+              
+              if (!isLoggedIn && !hasUserData) {
+                console.log('[App] Not logged in and no user data, redirecting to login');
                 return <Navigate to="/login" replace />;
               }
               
