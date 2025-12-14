@@ -32,27 +32,40 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     
     const checkExistingSession = async () => {
       try {
-        // Add shorter timeout fallback to prevent infinite loading
+        console.log('[login-page] Starting session check', {
+          isExtension,
+          hasRedirectUrl: !!redirectUrl,
+          hasStateToken: !!stateToken,
+          supabaseInitialized: !!supabase
+        });
+
+        // Add timeout fallback to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('[login-page] Session check timeout (2s), showing login form');
+            console.warn('[login-page] Session check timeout (3s), showing login form');
             setCheckingSession(false);
           }
-        }, 2000); // Reduced from 3s to 2s
-        
+        }, 3000); // Increased to 3s for better reliability
+
         // Race the session check with the timeout
         const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 2000)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session check timeout')), 3000)
         );
-        
+
+        console.log('[login-page] Racing session check with timeout');
+
         let sessionResult;
         try {
           sessionResult = await Promise.race([sessionPromise, timeoutPromise]);
+          console.log('[login-page] Session check completed', {
+            hasSession: !!(sessionResult as any)?.data?.session,
+            hasError: !!(sessionResult as any)?.error
+          });
         } catch (raceErr) {
           // Timeout won the race
+          console.warn('[login-page] Session check timed out, showing login form', raceErr);
           if (isMounted) {
-            console.warn('[login-page] Session check timed out, showing login form');
             setCheckingSession(false);
           }
           return;
@@ -146,9 +159,22 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       
       // If extension login, sign in directly to get session immediately
       if (isExtension && redirectUrl) {
+        console.log('[login-page] Starting extension login flow', {
+          email: email.substring(0, 3) + '...',
+          hasRedirectUrl: !!redirectUrl,
+          redirectUrl: redirectUrl.substring(0, 50) + '...'
+        });
+
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
+        });
+
+        console.log('[login-page] Extension login result', {
+          hasData: !!signInData,
+          hasSession: !!signInData?.session,
+          hasError: !!signInError,
+          errorMessage: signInError?.message?.substring(0, 50)
         });
         
         if (signInError) {
@@ -225,7 +251,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           if (stateToken) {
             hashParams.set('state', stateToken);
           }
-          
+
           // Append hash fragment
           const hashString = hashParams.toString();
           if (redirectUrl.includes('#')) {
@@ -233,16 +259,27 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           } else {
             finalUrl += `#${hashString}`;
           }
-          
-          console.log('[login-page] Final callback URL', { 
+
+          console.log('[login-page] Final callback URL', {
             finalUrl: finalUrl.substring(0, 150) + '...',
             urlLength: finalUrl.length,
             hasAccessToken: hashParams.has('access_token'),
             hasRefreshToken: hashParams.has('refresh_token'),
             hasState: hashParams.has('state')
           });
-          
+
+          // Add a fallback timeout in case redirect fails
+          const redirectTimeout = setTimeout(() => {
+            console.error('[login-page] Redirect timeout - redirect may have failed');
+            setError('Redirect to extension failed. Please try refreshing the extension popup.');
+            setIsLoading(false);
+          }, 3000);
+
+          // Attempt redirect
           window.location.href = finalUrl;
+
+          // Clear timeout if redirect starts (this won't execute if redirect succeeds)
+          setTimeout(() => clearTimeout(redirectTimeout), 100);
         } catch (urlErr) {
           console.error('[login-page] Error constructing callback URL:', urlErr);
           setError('Failed to construct callback URL. Please try again.');
