@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Settings } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Settings, Wind, Volume2, Star, Footprints, Bike, Train } from 'lucide-react';
 import { PreferenceTag, PreferenceToggles, UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
 
@@ -192,8 +192,8 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                   </button>
                 </div>
               </div>
-              
-              <div className="space-y-2">
+
+              <div className="space-y-2 mt-6">
                 {tags.map((tag, idx) => (
                   <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg group">
                     <div className="text-sm text-gray-800">
@@ -235,48 +235,63 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                 Select the environmental factors that matter most to your lifestyle.
               </p>
 
-              <div className="grid sm:grid-cols-3 gap-4">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
-                  { key: 'walkScore', label: 'Walkability', description: 'Walk Score®' },
-                  { key: 'bikeScore', label: 'Bikeability', description: 'Bike Score®' },
-                  { key: 'transitScore', label: 'Transit Access', description: 'Transit Score®' },
-                  { key: 'airQuality', label: 'Air Quality', description: 'Air quality index' },
-                  { key: 'soundScore', label: 'Sound Score', description: 'Noise pollution level' },
-                  { key: 'stargazeScore', label: 'Stargaze Score', description: 'Light pollution level' },
-                ].map((item) => (
-                  <label
-                    key={item.key}
-                    className={`flex items-center gap-4 p-5 rounded-lg border-2 cursor-pointer transition-all hover:shadow-sm ${
-                      (toggles as any)[item.key]
-                        ? 'border-[#556B2F] bg-[#556B2F]/5 shadow-sm'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean((toggles as any)[item.key])}
-                      onChange={(e) =>
-                        setToggles((prev) => ({ ...prev, [item.key]: e.target.checked }))
-                      }
-                      className="sr-only"
-                    />
-                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
-                      (toggles as any)[item.key]
-                        ? 'bg-[#556B2F] border-[#556B2F]'
-                        : 'border-gray-300'
-                    }`}>
-                      {(toggles as any)[item.key] && (
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 12 12">
-                          <path d="M3.707 5.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4a1 1 0 00-1.414-1.414L5 6.586 3.707 5.293z" />
-                        </svg>
+                  { key: 'walkScore', label: 'Walkability', description: 'Walk Score®', icon: Footprints },
+                  { key: 'bikeScore', label: 'Bikeability', description: 'Bike Score®', icon: Bike },
+                  { key: 'transitScore', label: 'Transit Access', description: 'Transit Score®', icon: Train },
+                  { key: 'airQuality', label: 'Air Quality', description: 'Clean air quality', icon: Wind },
+                  { key: 'soundScore', label: 'Sound Score', description: 'Low noise levels', icon: Volume2 },
+                  { key: 'stargazeScore', label: 'Stargaze Score', description: 'Dark sky conditions', icon: Star },
+                ].map((item) => {
+                  const IconComponent = item.icon;
+                  const isSelected = Boolean((toggles as any)[item.key]);
+
+                  return (
+                    <label
+                      key={item.key}
+                      className={`group flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${
+                        isSelected
+                          ? 'border-[#556B2F] bg-[#556B2F]/5 shadow-md'
+                          : 'border-gray-200 hover:border-[#556B2F]/30 bg-white'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) =>
+                          setToggles((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                        }
+                        className="sr-only"
+                      />
+
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all ${
+                        isSelected
+                          ? 'bg-[#556B2F] text-white'
+                          : 'bg-gray-100 text-gray-600 group-hover:bg-[#556B2F]/10 group-hover:text-[#556B2F]'
+                      }`}>
+                        <IconComponent className="w-6 h-6" />
+                      </div>
+
+                      <div className="text-center">
+                        <span className={`font-medium transition-colors ${
+                          isSelected ? 'text-[#556B2F]' : 'text-gray-800'
+                        }`}>
+                          {item.label}
+                        </span>
+                        <p className={`text-xs mt-1 transition-colors ${
+                          isSelected ? 'text-[#556B2F]/70' : 'text-gray-500'
+                        }`}>
+                          {item.description}
+                        </p>
+                      </div>
+
+                      {isSelected && (
+                        <div className="w-2 h-2 bg-[#556B2F] rounded-full animate-pulse" />
                       )}
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-800">{item.label}</span>
-                      <p className="text-xs text-gray-500 mt-1">{item.description}</p>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}
