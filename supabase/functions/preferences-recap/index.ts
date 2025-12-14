@@ -42,25 +42,35 @@ serve(async (req) => {
     return new Response("OpenAI not configured", { status: 500, headers: corsHeaders });
   }
 
-  const { tags = [], toggles = {}, freeformInput = "", otherPreferences = "" } = preferences;
+  const { tags = [], toggles = {} } = preferences;
 
   const tagsText = tags
-    .map((t: any) => `${t.label} (within ${t.distanceMiles} miles)`)
-    .join("; ");
+    .map((t: any) => t.label)
+    .join(", ") || "none provided";
 
   const togglesText = Object.entries(toggles || {})
     .filter(([, v]) => v)
-    .map(([k]) => k)
+    .map(([k]) => {
+      // Human-readable labels for the toggles
+      const labels: Record<string, string> = {
+        walkScore: "walkability",
+        bikeScore: "bikeability",
+        transitScore: "transit access",
+        airQuality: "good air quality",
+        soundScore: "low noise levels",
+        stargazeScore: "good stargazing conditions"
+      };
+      return labels[k] || k;
+    })
     .join(", ") || "none";
 
 const prompt = `
-Write a warm, human one-paragraph summary (under 80 words) in second person: “You are looking for… You also want…”.
-Simply restate their inputs (targets + distances, mobility signals, and notes) without asking for anything,
+Write a warm, human one-paragraph summary (under 80 words) in second person: "You are looking for… You also want…".
+Simply restate their inputs (place types and environmental preferences) without asking for anything,
 without promising listings, and without sales language. Make it readable and personal.
 
-Targets: ${tagsText || "none provided"}
-Mobility: ${togglesText}
-Notes: ${freeformInput || otherPreferences || "n/a"}
+Place types: ${tagsText}
+Environmental preferences: ${togglesText}
 
 Return plain text only.`;
 
