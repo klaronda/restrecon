@@ -8,11 +8,12 @@ interface EditPreferencesPageProps {
   userName: string;
   initialPreferences?: UserPreferences | null;
   onComplete: (preferences: UserPreferences) => Promise<void>;
+  onLogout?: () => void;
 }
 
 type WizardStep = 0 | 1;
 
-export function EditPreferencesPage({ userName, initialPreferences, onComplete }: EditPreferencesPageProps) {
+export function EditPreferencesPage({ userName, initialPreferences, onComplete, onLogout }: EditPreferencesPageProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>(0);
   const [tags, setTags] = useState<PreferenceTag[]>([]);
@@ -81,7 +82,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SharedNav />
+      <SharedNav isLoggedIn={true} onLogout={onLogout} />
 
       {/* Header */}
       <div className="relative bg-gradient-to-r from-[#1C2A40] via-[#556B2F] to-[#4a5e28] text-white">

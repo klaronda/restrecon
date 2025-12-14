@@ -217,69 +217,85 @@ function App() {
     }
   };
 
-  const handlePreferencesComplete = async (prefs: UserPreferences) => {
+  /**
+   * Saves user preferences and regenerates the preference recap.
+   * This should be called whenever user preferences are updated.
+   */
+  const savePreferencesWithRecap = async (prefs: UserPreferences) => {
     const { data } = await supabase.auth.getSession();
     const session = data.session;
     if (!session?.user) return;
+
     setIsSavingPrefs(true);
 
-    const ensureUser = async () => {
-      const authId = session.user.id;
-      // Try by auth_user_id
-      const byAuth = await supabase
-        .from('users')
-        .select('id, auth_user_id')
-        .eq('auth_user_id', authId)
-        .maybeSingle();
-      if (byAuth.data?.id) return byAuth.data.id as string;
-
-      // Try by email
-      const byEmail = await supabase
-        .from('users')
-        .select('id, auth_user_id')
-        .eq('email', session.user.email ?? '')
-        .maybeSingle();
-      if (byEmail.data?.id) return byEmail.data.id as string;
-
-      // Upsert with id and auth_user_id the same to satisfy FK
-      const insert = await supabase
-        .from('users')
-        .upsert(
-          {
-            id: authId,
-            auth_user_id: authId,
-            email: session.user.email ?? null,
-            plan: 'none',
-            trial_ends_at: null,
-          },
-          { onConflict: 'id' }
-        )
-        .select('id')
-        .maybeSingle();
-
-      if (insert.data?.id) return insert.data.id as string;
-      return authId;
-    };
-
-    const targetUserId = await ensureUser();
-    console.log('[App] handlePreferencesComplete: Saving preferences for userId:', targetUserId);
-
-    let recap: string | null = null;
     try {
-      recap = await generateRecap(targetUserId, prefs);
-      console.log('[App] handlePreferencesComplete: Generated recap:', !!recap);
-    } catch (err) {
-      console.error('Recap failed, saving prefs without recap', err);
-    }
-    try {
+      const ensureUser = async () => {
+        const authId = session.user.id;
+        // Try by auth_user_id
+        const byAuth = await supabase
+          .from('users')
+          .select('id, auth_user_id')
+          .eq('auth_user_id', authId)
+          .maybeSingle();
+        if (byAuth.data?.id) return byAuth.data.id as string;
+
+        // Try by email
+        const byEmail = await supabase
+          .from('users')
+          .select('id, auth_user_id')
+          .eq('email', session.user.email ?? '')
+          .maybeSingle();
+        if (byEmail.data?.id) return byEmail.data.id as string;
+
+        // Upsert with id and auth_user_id the same to satisfy FK
+        const insert = await supabase
+          .from('users')
+          .upsert(
+            {
+              id: authId,
+              auth_user_id: authId,
+              email: session.user.email ?? null,
+              plan: 'none',
+              trial_ends_at: null,
+            },
+            { onConflict: 'id' }
+          )
+          .select('id')
+          .maybeSingle();
+
+        if (insert.data?.id) return insert.data.id as string;
+        return authId;
+      };
+
+      const targetUserId = await ensureUser();
+      console.log('[App] savePreferencesWithRecap: Saving preferences for userId:', targetUserId);
+
+      // Always regenerate the recap when preferences are updated
+      let recap: string | null = null;
+      try {
+        recap = await generateRecap(targetUserId, prefs);
+        console.log('[App] savePreferencesWithRecap: Generated recap:', !!recap);
+      } catch (err) {
+        console.error('Recap regeneration failed, saving prefs without recap', err);
+      }
+
+      // Save preferences with the new recap
       const result = await savePreferences(targetUserId, session.user.email ?? null, prefs, recap ?? undefined);
-      console.log('[App] handlePreferencesComplete: Preferences saved successfully:', !!result);
+      console.log('[App] savePreferencesWithRecap: Preferences saved successfully:', !!result);
+
+      // Update local state with new preferences and recap
       setPreferences({ ...prefs, recapText: recap ?? prefs.recapText });
+
     } catch (err) {
-      console.error('Save preferences failed', err);
+      console.error('Save preferences with recap failed', err);
+      throw err; // Re-throw so callers can handle errors
     } finally {
       setIsSavingPrefs(false);
     }
+  };
+
+  const handlePreferencesComplete = async (prefs: UserPreferences) => {
+    await savePreferencesWithRecap(prefs);
   };
 
   const AccountRoute = () => {
@@ -624,29 +640,34 @@ function App() {
           path="/terms" 
           element={<TermsOfServicePage isLoggedIn={isLoggedIn} />} 
         />
-        <Route 
-          path="/edit-profile" 
+        <Route
+          path="/edit-profile"
           element={
             isLoggedIn ? (
-              <EditProfilePage />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
-        />
-        <Route 
-          path="/edit-preferences" 
-          element={
-            isLoggedIn ? (
-              <EditPreferencesPage 
-                userName={userName || 'User'}
-                initialPreferences={preferences}
-                onComplete={handlePreferencesComplete}
+              <EditProfilePage
+                onLogout={handleLogout}
+                currentPreferences={preferences}
+                onPreferencesUpdated={savePreferencesWithRecap}
               />
             ) : (
               <Navigate to="/login" replace />
             )
-          } 
+          }
+        />
+        <Route
+          path="/edit-preferences"
+          element={
+            isLoggedIn ? (
+              <EditPreferencesPage
+                userName={userName || 'User'}
+                initialPreferences={preferences}
+                onComplete={handlePreferencesComplete}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
         />
 
         {/* Fallback */}

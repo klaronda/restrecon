@@ -4,8 +4,15 @@ import { Eye, EyeOff, User, ArrowLeft } from 'lucide-react';
 import { updateProfile, updatePassword, fetchProfile } from '../../services/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { SharedNav } from './shared-nav';
+import { UserPreferences } from '../../services/preferences';
 
-export function EditProfilePage() {
+interface EditProfilePageProps {
+  onLogout?: () => void;
+  currentPreferences?: UserPreferences | null;
+  onPreferencesUpdated?: (prefs: UserPreferences) => Promise<void>;
+}
+
+export function EditProfilePage({ onLogout, currentPreferences, onPreferencesUpdated }: EditProfilePageProps) {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -63,6 +70,17 @@ export function EditProfilePage() {
         await updatePassword(password);
       }
 
+      // If preferences exist and we have a recap regeneration function,
+      // regenerate the recap since profile changes might affect it
+      if (currentPreferences && onPreferencesUpdated) {
+        try {
+          await onPreferencesUpdated(currentPreferences);
+        } catch (recapError) {
+          // Don't fail the profile update if recap regeneration fails
+          console.warn('[EditProfilePage] Recap regeneration failed:', recapError);
+        }
+      }
+
       setSuccess(true);
       setTimeout(() => {
         navigate('/account');
@@ -87,7 +105,7 @@ export function EditProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <SharedNav />
+      <SharedNav isLoggedIn={true} onLogout={onLogout} />
 
       {/* Header */}
       <div className="relative bg-gradient-to-r from-[#1C2A40] via-[#556B2F] to-[#4a5e28] text-white">
