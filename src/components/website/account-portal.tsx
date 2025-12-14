@@ -244,7 +244,7 @@ export function AccountPortal({
                           key={idx}
                           className="text-xs text-gray-800 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full"
                         >
-                          {tag.label} · ≤ {tag.distanceMiles} mi
+                          {tag.label}
                         </span>
                       ))}
                     </div>

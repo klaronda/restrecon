@@ -18,7 +18,6 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
   const [otherPreferences, setOtherPreferences] = useState('');
   const [tags, setTags] = useState<PreferenceTag[]>([]);
   const [newTagLabel, setNewTagLabel] = useState('');
-  const [newTagDistance, setNewTagDistance] = useState<number>(5);
   const [toggles, setToggles] = useState<PreferenceToggles>({
     walkScore: true,
     bikeScore: false,
@@ -28,7 +27,11 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
 
   useEffect(() => {
     if (initialPreferences) {
-      setTags(initialPreferences.tags || []);
+      // Convert old tags that might have distanceMiles to new format without it
+      const convertedTags = (initialPreferences.tags || []).map(tag => ({
+        label: tag.label
+      }));
+      setTags(convertedTags);
       setToggles({
         walkScore: Boolean(initialPreferences.toggles?.walkScore),
         bikeScore: Boolean(initialPreferences.toggles?.bikeScore),
@@ -40,9 +43,8 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
 
   const addTag = () => {
     if (!newTagLabel.trim() || tags.length >= 5) return;
-    setTags((prev) => [...prev, { label: newTagLabel.trim(), distanceMiles: newTagDistance || 5 }]);
+    setTags((prev) => [...prev, { label: newTagLabel.trim() }]);
     setNewTagLabel('');
-    setNewTagDistance(5);
   };
 
   const removeTag = (idx: number) => {
@@ -165,7 +167,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
               
               <div className="space-y-4">
                 <p className="text-gray-600 text-sm">
-                  Add up to 5 place types that matter to your search, plus max distance in miles.
+                  Add up to 5 place types that matter to your search.
                 </p>
 
                 <div className="flex flex-wrap gap-3">
@@ -174,21 +176,12 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                     onChange={(e) => setNewTagLabel(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="e.g., preschools, skateparks, coffee shops"
-                    className="flex-1 min-w-[220px] px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={newTagDistance}
-                    onChange={(e) => setNewTagDistance(Number(e.target.value))}
-                    className="w-24 px-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors text-center"
-                    placeholder="Miles"
+                    className="flex-1 min-w-[280px] px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
                   />
                   <button
                     onClick={addTag}
                     disabled={tags.length >= 5 || !newTagLabel.trim()}
-                    className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-6 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                     Add
@@ -201,7 +194,6 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                   <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg group">
                     <div className="text-sm text-gray-800">
                       <span className="font-medium">{tag.label}</span>
-                      <span className="text-gray-500"> · within {tag.distanceMiles} miles</span>
                     </div>
                     <button
                       onClick={() => removeTag(idx)}
