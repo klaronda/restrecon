@@ -643,10 +643,38 @@ function App() {
       
       const refresh = async () => {
         try {
+          // First check if we have a session
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (!sessionData?.session) {
+            console.log('[App] AccountRoute: No session, redirecting to login');
+            // Don't redirect here - let the route handler do it
+            return;
+          }
+          
+          // If we have session but no profile data, try to ensure profile exists
+          if (!userName && !userEmail && sessionData.session.user) {
+            console.log('[App] AccountRoute: Session exists but no profile, ensuring profile');
+            try {
+              const profile = await ensureUserProfile(sessionData.session.user.id, sessionData.session.user.email);
+              if (profile) {
+                applyProfile(profile, sessionData.session.user.email);
+                setIsLoggedIn(true);
+                return; // Profile loaded, we're done
+              }
+            } catch (profileErr) {
+              console.error('[App] AccountRoute: Error ensuring profile:', profileErr);
+            }
+          }
+          
           // Force refresh by resetting the loading flag
           profileLoadingRef.current = false;
           const status = await refreshProfile();
           console.log('[App] AccountRoute: Profile refreshed, status:', status);
+          
+          // Ensure isLoggedIn is set if we have a session
+          if (sessionData.session && !isLoggedIn) {
+            setIsLoggedIn(true);
+          }
           
           // If still showing wrong data, try one more time after a short delay
           if (userName === 'klaronda' || subscriptionStatus === 'none') {
