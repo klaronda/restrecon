@@ -250,15 +250,48 @@ export function AccountPortal({
                     </div>
                   </div>
                 ) : null}
-                <div className="flex gap-3 text-xs text-gray-700">
-                  <span className="px-2 py-1 bg-gray-100 rounded border border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-gray-700">
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.walkScore
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
                     Walkability: {preferences.toggles?.walkScore ? 'On' : 'Off'}
                   </span>
-                  <span className="px-2 py-1 bg-gray-100 rounded border border-gray-200">
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.bikeScore
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
                     Bikeability: {preferences.toggles?.bikeScore ? 'On' : 'Off'}
                   </span>
-                  <span className="px-2 py-1 bg-gray-100 rounded border border-gray-200">
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.transitScore
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
                     Transit: {preferences.toggles?.transitScore ? 'On' : 'Off'}
+                  </span>
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.airQuality
+                      ? 'bg-blue-50 border-blue-200 text-blue-700'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
+                    Air Quality: {preferences.toggles?.airQuality ? 'On' : 'Off'}
+                  </span>
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.soundScore
+                      ? 'bg-purple-50 border-purple-200 text-purple-700'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
+                    Sound Score: {preferences.toggles?.soundScore ? 'On' : 'Off'}
+                  </span>
+                  <span className={`px-2 py-1 rounded border ${
+                    preferences.toggles?.stargazeScore
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      : 'bg-gray-100 border-gray-200'
+                  }`}>
+                    Stargaze Score: {preferences.toggles?.stargazeScore ? 'On' : 'Off'}
                   </span>
                 </div>
                 <Link
