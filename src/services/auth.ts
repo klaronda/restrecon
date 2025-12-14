@@ -120,33 +120,184 @@ export async function signUpWithProfile(payload: SignUpPayload): Promise<AuthPro
 }
 
 export async function ensureUserProfile(userId: string, email?: string | null): Promise<AuthProfile | null> {
+  const isDevMode = import.meta.env.DEV;
+  
+  console.log('[auth] ensureUserProfile: Starting', {
+    userId,
+    email: email ? `${email.substring(0, 3)}***@${email.split('@')[1]}` : 'none',
+    queryingBy: 'auth_user_id'
+  });
+  
+  // Step 1: Try querying by auth_user_id
   const { data, error } = await supabase
     .from('users')
-    .select('first_name, last_name, email, plan, trial_ends_at')
+    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
     .eq('auth_user_id', userId)
     .maybeSingle();
 
-  if (error) throw error;
-  if (data) return data;
+  if (error) {
+    console.error('[auth] ensureUserProfile: Query by auth_user_id failed', {
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      userId,
+      isRLSError: error.message?.includes('row-level security') || error.message?.includes('policy')
+    });
+    
+    // If RLS error and we have email, try fallback query by email
+    if ((error.message?.includes('row-level security') || error.message?.includes('policy')) && email) {
+      console.log('[auth] ensureUserProfile: RLS error detected, trying fallback query by email');
+      return await ensureUserProfileByEmail(userId, email);
+    }
+    
+    throw error;
+  }
+  
+  if (data) {
+    console.log('[auth] ensureUserProfile: Profile found by auth_user_id', {
+      profileId: data.id,
+      email: data.email,
+      plan: data.plan,
+      authUserIdMatches: data.auth_user_id === userId
+    });
+    return data;
+  }
 
-  // Create a default trial profile if missing (plan constraint doesn't allow 'none')
+  // Step 2: No profile found by auth_user_id, try querying by email as fallback
+  if (email) {
+    console.log('[auth] ensureUserProfile: No profile by auth_user_id, trying email fallback', {
+      email: `${email.substring(0, 3)}***@${email.split('@')[1]}`
+    });
+    const profileByEmail = await ensureUserProfileByEmail(userId, email);
+    if (profileByEmail) {
+      return profileByEmail;
+    }
+  }
+
+  // Step 3: No profile exists, create a default trial profile
+  console.log('[auth] ensureUserProfile: No profile found, creating new trial profile', {
+    userId,
+    email: email ? `${email.substring(0, 3)}***@${email.split('@')[1]}` : 'none'
+  });
+  
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const { error: upsertError } = await supabase
+  const { data: createdData, error: upsertError } = await supabase
     .from('users')
     .upsert({
       auth_user_id: userId,
       email: email ?? null,
       plan: 'trial',
       trial_ends_at: trialEndsAt,
-    }, { onConflict: 'auth_user_id' });
+    }, { onConflict: 'auth_user_id' })
+    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+    .maybeSingle();
 
-  if (upsertError) throw upsertError;
+  if (upsertError) {
+    console.error('[auth] ensureUserProfile: Failed to create profile', {
+      errorMessage: upsertError.message,
+      errorCode: upsertError.code,
+      errorDetails: upsertError.details,
+      userId,
+      isRLSError: upsertError.message?.includes('row-level security') || upsertError.message?.includes('policy')
+    });
+    throw upsertError;
+  }
 
+  if (createdData) {
+    console.log('[auth] ensureUserProfile: Profile created successfully', {
+      profileId: createdData.id,
+      email: createdData.email,
+      plan: createdData.plan
+    });
+    return createdData;
+  }
+
+  console.warn('[auth] ensureUserProfile: Profile creation returned no data');
   return {
     email: email ?? null,
     plan: 'trial',
     trial_ends_at: trialEndsAt,
   };
+}
+
+// Helper function to query profile by email and update auth_user_id if needed
+async function ensureUserProfileByEmail(userId: string, email: string): Promise<AuthProfile | null> {
+  const isDevMode = import.meta.env.DEV;
+  
+  console.log('[auth] ensureUserProfileByEmail: Querying by email', {
+    email: `${email.substring(0, 3)}***@${email.split('@')[1]}`,
+    userId
+  });
+  
+  // Try exact email match first
+  let { data, error } = await supabase
+    .from('users')
+    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+    .eq('email', email)
+    .maybeSingle();
+
+  // If no exact match, try case-insensitive
+  if (!data && !error) {
+    console.log('[auth] ensureUserProfileByEmail: No exact match, trying case-insensitive');
+    const caseInsensitiveQuery = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+      .ilike('email', email)
+      .maybeSingle();
+    
+    data = caseInsensitiveQuery.data;
+    error = caseInsensitiveQuery.error;
+  }
+
+  if (error) {
+    console.error('[auth] ensureUserProfileByEmail: Query by email failed', {
+      errorMessage: error.message,
+      errorCode: error.code,
+      email: `${email.substring(0, 3)}***@${email.split('@')[1]}`
+    });
+    return null;
+  }
+
+  if (data) {
+    console.log('[auth] ensureUserProfileByEmail: Profile found by email', {
+      profileId: data.id,
+      email: data.email,
+      currentAuthUserId: data.auth_user_id,
+      expectedAuthUserId: userId,
+      needsUpdate: data.auth_user_id !== userId
+    });
+    
+    // If auth_user_id doesn't match, update it
+    if (data.auth_user_id !== userId) {
+      console.log('[auth] ensureUserProfileByEmail: Updating auth_user_id to match session', {
+        oldAuthUserId: data.auth_user_id,
+        newAuthUserId: userId
+      });
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ auth_user_id: userId })
+        .eq('id', data.id);
+      
+      if (updateError) {
+        console.error('[auth] ensureUserProfileByEmail: Failed to update auth_user_id', {
+          errorMessage: updateError.message,
+          errorCode: updateError.code,
+          profileId: data.id
+        });
+        // Continue anyway - return the profile even if update failed
+      } else {
+        console.log('[auth] ensureUserProfileByEmail: Successfully updated auth_user_id');
+        // Update the returned data with the new auth_user_id
+        data.auth_user_id = userId;
+      }
+    }
+    
+    return data;
+  }
+
+  console.log('[auth] ensureUserProfileByEmail: No profile found by email');
+  return null;
 }
 
 // Helper function to get user-friendly login error messages

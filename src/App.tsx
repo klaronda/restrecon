@@ -817,16 +817,65 @@ function App() {
         
         if (session?.user && isMounted) {
           try {
-            console.log('[App] Ensuring profile exists for user:', session.user.id);
+            console.log('[App] Ensuring profile exists for user:', {
+              userId: session.user.id,
+              email: session.user.email ? `${session.user.email.substring(0, 3)}***@${session.user.email.split('@')[1]}` : 'none'
+            });
+            
             // Use ensureUserProfile which will create a profile if it doesn't exist
             const profileTimeout = new Promise<AuthProfile | null>((_, reject) => 
-              setTimeout(() => reject(new Error('Profile ensure timeout')), 3000)
+              setTimeout(() => reject(new Error('Profile ensure timeout')), 5000)
             );
             
-            const profile = await Promise.race([
-              ensureUserProfile(session.user.id, session.user.email),
-              profileTimeout
-            ]);
+            let profile: AuthProfile | null = null;
+            try {
+              profile = await Promise.race([
+                ensureUserProfile(session.user.id, session.user.email),
+                profileTimeout
+              ]);
+            } catch (ensureErr: any) {
+              console.error('[App] ensureUserProfile failed, trying fallback query by email', {
+                error: ensureErr?.message,
+                email: session.user.email
+              });
+              
+              // Fallback: try direct query by email
+              if (session.user.email) {
+                try {
+                  const { data: emailProfile, error: emailError } = await supabase
+                    .from('users')
+                    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+                    .eq('email', session.user.email)
+                    .maybeSingle();
+                  
+                  if (emailError) {
+                    console.error('[App] Fallback email query failed', {
+                      error: emailError.message,
+                      errorCode: emailError.code
+                    });
+                  } else if (emailProfile) {
+                    console.log('[App] Fallback email query found profile', {
+                      profileId: emailProfile.id,
+                      authUserIdMatches: emailProfile.auth_user_id === session.user.id
+                    });
+                    
+                    // Update auth_user_id if it doesn't match
+                    if (emailProfile.auth_user_id !== session.user.id) {
+                      console.log('[App] Updating auth_user_id from fallback query');
+                      await supabase
+                        .from('users')
+                        .update({ auth_user_id: session.user.id })
+                        .eq('id', emailProfile.id);
+                      emailProfile.auth_user_id = session.user.id;
+                    }
+                    
+                    profile = emailProfile;
+                  }
+                } catch (fallbackErr) {
+                  console.error('[App] Fallback email query exception:', fallbackErr);
+                }
+              }
+            }
             
             if (profile) {
               console.log('[App] Profile ensured/loaded:', {
@@ -838,7 +887,9 @@ function App() {
               });
               applyProfile(profile, session.user.email);
             } else {
-              console.warn('[App] Profile ensure returned null');
+              console.warn('[App] Profile ensure returned null - user will need to log in again');
+              // Don't reset auth state here - let the user try to access account
+              // The account route will handle the redirect if needed
             }
           } catch (profileErr) {
             console.error('[App] Error ensuring profile on init:', profileErr);
@@ -854,9 +905,42 @@ function App() {
           console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
           if (session?.user) {
             try {
-              console.log('[App] Auth state change - ensuring profile for user:', session.user.id);
+              console.log('[App] Auth state change - ensuring profile for user:', {
+                userId: session.user.id,
+                email: session.user.email ? `${session.user.email.substring(0, 3)}***@${session.user.email.split('@')[1]}` : 'none'
+              });
+              
               // Use ensureUserProfile which will create a profile if it doesn't exist
-              const profile = await ensureUserProfile(session.user.id, session.user.email);
+              let profile: AuthProfile | null = null;
+              try {
+                profile = await ensureUserProfile(session.user.id, session.user.email);
+              } catch (ensureErr: any) {
+                console.error('[App] ensureUserProfile failed in auth state change, trying fallback', {
+                  error: ensureErr?.message
+                });
+                
+                // Fallback: try direct query by email
+                if (session.user.email) {
+                  const { data: emailProfile } = await supabase
+                    .from('users')
+                    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+                    .eq('email', session.user.email)
+                    .maybeSingle();
+                  
+                  if (emailProfile) {
+                    // Update auth_user_id if needed
+                    if (emailProfile.auth_user_id !== session.user.id) {
+                      await supabase
+                        .from('users')
+                        .update({ auth_user_id: session.user.id })
+                        .eq('id', emailProfile.id);
+                      emailProfile.auth_user_id = session.user.id;
+                    }
+                    profile = emailProfile;
+                  }
+                }
+              }
+              
               if (profile) {
                 console.log('[App] Profile ensured on auth state change:', {
                   plan: profile.plan,
@@ -867,7 +951,7 @@ function App() {
                 applyProfile(profile, session.user.email);
               } else {
                 console.warn('[App] Profile ensure returned null on auth state change');
-                resetAuthState();
+                // Don't reset auth state - session is valid, profile might be loading
               }
             } catch (profileErr) {
               console.error('[App] Error in auth state change handler:', profileErr);
