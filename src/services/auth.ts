@@ -161,6 +161,10 @@ function getSignInErrorMessage(error: any, isDevMode: boolean = false): string {
   }
   
   // Check for exact Supabase error codes
+  if (errorCode === 'email_provider_disabled' || errorMessage.includes('Email logins are disabled')) {
+    return 'Email authentication is currently disabled. Please contact support or use a different login method.';
+  }
+  
   if (errorCode === 'invalid_credentials' || errorCode === 'invalid_grant') {
     return 'Invalid email or password. Please check your credentials and try again.';
   }

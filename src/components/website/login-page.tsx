@@ -163,7 +163,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           
           let friendlyMessage = 'Login failed. Please check your credentials and try again.';
           
-          if (errorCode === 'invalid_credentials' || errorCode === 'invalid_grant' ||
+          if (errorCode === 'email_provider_disabled' || errorMessage.includes('Email logins are disabled')) {
+            friendlyMessage = 'Email authentication is currently disabled. Please contact support or use a different login method.';
+          } else if (errorCode === 'invalid_credentials' || errorCode === 'invalid_grant' ||
               errorMessage.toLowerCase().includes('invalid login credentials') ||
               (errorMessage.toLowerCase().includes('invalid') && errorMessage.toLowerCase().includes('password'))) {
             friendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
