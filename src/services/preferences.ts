@@ -68,7 +68,23 @@ export async function fetchPreferences(userId: string, email?: string): Promise<
 }
 
 export async function savePreferences(userId: string, email: string | null, prefs: UserPreferences, recapText?: string) {
-  const { error } = await supabase
+  console.log('[savePreferences] Starting save:', {
+    userId,
+    email,
+    prefsKeys: Object.keys(prefs),
+    tagsCount: prefs.tags?.length || 0,
+    recapText: !!recapText
+  });
+  
+  // Log the preferences structure to debug distance updates
+  if (prefs.tags && prefs.tags.length > 0) {
+    console.log('[savePreferences] Tags with distances:', prefs.tags.map(t => ({
+      label: t.label,
+      distanceMiles: t.distanceMiles
+    })));
+  }
+  
+  const { data, error } = await supabase
     .from('preference_profiles')
     .upsert(
       {
@@ -79,12 +95,27 @@ export async function savePreferences(userId: string, email: string | null, pref
         email: email,
       },
       { onConflict: 'id' }
-    );
+    )
+    .select();
 
   if (error) {
-    console.error('savePreferences error', error);
+    console.error('[savePreferences] Error saving preferences:', {
+      error,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      userId,
+      email
+    });
     throw error;
   }
+  
+  console.log('[savePreferences] Successfully saved preferences:', {
+    saved: !!data,
+    dataLength: data?.length || 0
+  });
+  
+  return data;
 }
 
 export async function generateRecap(userId: string, prefs: UserPreferences): Promise<string | null> {

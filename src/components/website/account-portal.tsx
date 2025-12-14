@@ -162,10 +162,9 @@ export function AccountPortal({
             {isFree && (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <p className="text-gray-900 mb-2">NestRecon Free</p>
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Plan: Free</span>
+                  <p className="text-gray-900 mb-2">NestRecon Plan</p>
                   <p className="text-sm text-gray-600">
-                    You&apos;re on the Free Plan. Upgrade to unlock full recon, real-world intel, and personalized scoring.
+                    You&apos;re on the <strong>Free</strong> Plan. Upgrade to unlock full recon, real-world intel, and personalized scoring.
                   </p>
                 </div>
                 <Link 
@@ -326,7 +325,19 @@ export function AccountPortal({
               </div>
             </div>
             <div className="mt-4">
-              <button className="text-sm text-red-600 hover:underline block" onClick={onLogout}>
+              <button 
+                className="text-sm text-red-600 hover:underline block" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('[AccountPortal] Logout button clicked');
+                  if (onLogout) {
+                    onLogout();
+                  } else {
+                    console.error('[AccountPortal] onLogout handler not provided');
+                  }
+                }}
+              >
                 Log out everywhere
               </button>
             </div>

@@ -56,13 +56,24 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               redirectUrl
             });
             try {
-              const callbackUrl = new URL(redirectUrl);
-              callbackUrl.searchParams.set('access_token', session.access_token);
-              callbackUrl.searchParams.set('refresh_token', session.refresh_token);
+              // Manually construct URL for chrome-extension:// protocol
+              // Use hash fragments instead of query params for better compatibility
+              let finalUrl = redirectUrl;
+              const hashParams = new URLSearchParams();
+              hashParams.set('access_token', session.access_token);
+              hashParams.set('refresh_token', session.refresh_token);
               if (stateToken) {
-                callbackUrl.searchParams.set('state', stateToken);
+                hashParams.set('state', stateToken);
               }
-              const finalUrl = callbackUrl.toString();
+              
+              // Append hash fragment
+              const hashString = hashParams.toString();
+              if (redirectUrl.includes('#')) {
+                finalUrl += `&${hashString}`;
+              } else {
+                finalUrl += `#${hashString}`;
+              }
+              
               console.log('[login-page] Redirecting to extension:', finalUrl.substring(0, 100) + '...');
               window.location.href = finalUrl;
               return; // Don't set checkingSession to false, we're redirecting
@@ -145,19 +156,30 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         });
         
         try {
-          const callbackUrl = new URL(redirectUrl);
-          callbackUrl.searchParams.set('access_token', session.access_token);
-          callbackUrl.searchParams.set('refresh_token', session.refresh_token);
+          // Manually construct URL for chrome-extension:// protocol
+          // Use hash fragments instead of query params for better compatibility
+          let finalUrl = redirectUrl;
+          const hashParams = new URLSearchParams();
+          hashParams.set('access_token', session.access_token);
+          hashParams.set('refresh_token', session.refresh_token);
           if (stateToken) {
-            callbackUrl.searchParams.set('state', stateToken);
+            hashParams.set('state', stateToken);
           }
           
-          const finalUrl = callbackUrl.toString();
+          // Append hash fragment
+          const hashString = hashParams.toString();
+          if (redirectUrl.includes('#')) {
+            finalUrl += `&${hashString}`;
+          } else {
+            finalUrl += `#${hashString}`;
+          }
+          
           console.log('[login-page] Final callback URL', { 
-            finalUrl,
+            finalUrl: finalUrl.substring(0, 150) + '...',
             urlLength: finalUrl.length,
-            hasAccessToken: callbackUrl.searchParams.has('access_token'),
-            hasRefreshToken: callbackUrl.searchParams.has('refresh_token')
+            hasAccessToken: hashParams.has('access_token'),
+            hasRefreshToken: hashParams.has('refresh_token'),
+            hasState: hashParams.has('state')
           });
           
           window.location.href = finalUrl;

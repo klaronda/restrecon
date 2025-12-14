@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const HOWLOUD_API_KEY = Deno.env.get('HOWLOUD_API_KEY');
-const HOWLOUD_CLIENT_ID = Deno.env.get('HOWLOUD_CLIENT_ID');
 const OPENWEATHER_API_KEY = Deno.env.get('OPENWEATHER_API_KEY');
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const MAPBOX_ACCESS_TOKEN = Deno.env.get('MAPBOX_ACCESS_TOKEN');
@@ -53,14 +52,14 @@ interface ListingPayload {
   };
   schools?: { label: string; score: number }[];
   mobility?: { walk?: number; bike?: number; transit?: number };
-  environment?: { sound?: string; air?: string; sky?: string; light?: string; soundScore?: number; airScore?: number; lightScore?: number };
+  environment?: { sound?: string; air?: string; sky?: string; soundScore?: number; airScore?: number };
   commuteScore?: number; // 0–100
   targets?: EvaluatedTarget[];
 }
 
 interface ProResult {
-  proRawScore: number; // 0–100
-  missionFitScore: number; // 0–100
+  basicReconScore: number; // 0–100 (Free score - generic, same for all users)
+  missionFitScore: number; // 0–100 (Pro score - personalized based on targets/mobility)
   recap: string;
   notes?: string[];
   targets?: Array<EvaluatedTarget & { score: number }>;
@@ -75,6 +74,7 @@ interface ProResult {
     stargazingScore?: number;
     stargazingLabel?: string;
   };
+  isProMode?: boolean; // True if user has preferences (Pro mode), false if no preferences (Free mode)
   debug?: Record<string, unknown>;
 }
 
@@ -95,76 +95,43 @@ function soundLabel(score?: number) {
   return 'Not Good';
 }
 
-async function fetchHowloud(address?: string): Promise<{ score?: number; label: string } | null> {
-  if (!address || !HOWLOUD_API_KEY || !HOWLOUD_CLIENT_ID) {
-    console.warn('[pro-recap] Howloud: missing API key or client ID', { 
-      hasAddress: !!address, 
-      hasApiKey: !!HOWLOUD_API_KEY, 
-      hasClientId: !!HOWLOUD_CLIENT_ID 
+/**
+ * Fetches sound score from Howloud API v2.
+ * Uses lat/lng coordinates (not address) and only requires x-api-key header.
+ * 
+ * API docs: https://api.howloud.com/docs/
+ * Endpoint: GET /v2/score
+ * Response: { "status": "OK", "result": { "score": 80, ... } }
+ */
+async function fetchHowloud(lat?: number, lon?: number): Promise<{ score?: number; label: string } | null> {
+  if (!lat || !lon || !HOWLOUD_API_KEY) {
+    console.warn('[pro-recap] Howloud: missing coordinates or API key', { 
+      hasLat: lat != null && Number.isFinite(lat), 
+      hasLon: lon != null && Number.isFinite(lon),
+      hasApiKey: !!HOWLOUD_API_KEY 
     });
     return null;
   }
+  
   try {
-    const url = new URL('https://api.howloud.com/v1/soundscore');
-    url.searchParams.set('address', address);
-    url.searchParams.set('client_id', HOWLOUD_CLIENT_ID);
+    const url = new URL('https://api.howloud.com/v2/score');
+    url.searchParams.set('lat', lat.toString());
+    url.searchParams.set('lng', lon.toString());
+    
     console.log('[pro-recap] Howloud: fetching', { 
-      address, 
+      lat, 
+      lon,
       url: url.toString(), 
-      hasApiKey: !!HOWLOUD_API_KEY, 
-      hasClientId: !!HOWLOUD_CLIENT_ID,
-      apiKeyLength: HOWLOUD_API_KEY?.length || 0,
-      clientIdLength: HOWLOUD_CLIENT_ID?.length || 0
+      hasApiKey: !!HOWLOUD_API_KEY,
+      apiKeyLength: HOWLOUD_API_KEY?.length || 0
     });
     
-    // Try with X-Api-Key header first (AWS API Gateway expects capitalized header)
-    let resp = await fetch(url.toString(), {
+    const resp = await fetch(url.toString(), {
       headers: { 
-        'X-Api-Key': HOWLOUD_API_KEY,
+        'x-api-key': HOWLOUD_API_KEY,
         'Content-Type': 'application/json'
       },
     });
-    
-    // If 403, try alternative: Authorization header or client_id in header
-    if (resp.status === 403) {
-      console.warn('[pro-recap] Howloud: 403 with X-Api-Key, trying alternative auth methods');
-      
-      // Try with Authorization header
-      resp = await fetch(url.toString(), {
-        headers: { 
-          'Authorization': `Bearer ${HOWLOUD_API_KEY}`,
-          'X-Api-Key': HOWLOUD_API_KEY,
-          'Content-Type': 'application/json'
-        },
-      });
-      
-      // If still 403, try with client_id in header instead of query
-      if (resp.status === 403) {
-        const altUrl = new URL('https://api.howloud.com/v1/soundscore');
-        altUrl.searchParams.set('address', address);
-        resp = await fetch(altUrl.toString(), {
-          headers: { 
-            'X-Api-Key': HOWLOUD_API_KEY,
-            'X-Client-Id': HOWLOUD_CLIENT_ID,
-            'Content-Type': 'application/json'
-          },
-        });
-      }
-      
-      // If still 403 after all attempts, log detailed info and return null
-      if (resp.status === 403) {
-        const errorText = await resp.text().catch(() => 'Unable to read error response');
-        console.warn('[pro-recap] Howloud: All authentication methods failed with 403', {
-          note: 'Please verify HOWLOUD_API_KEY and HOWLOUD_CLIENT_ID are correct in Supabase Edge Function secrets',
-          apiKeyPresent: !!HOWLOUD_API_KEY,
-          clientIdPresent: !!HOWLOUD_CLIENT_ID,
-          apiKeyLength: HOWLOUD_API_KEY?.length || 0,
-          clientIdLength: HOWLOUD_CLIENT_ID?.length || 0,
-          errorMessage: errorText.substring(0, 200)
-        });
-        return null;
-      }
-    }
     
     if (!resp.ok) {
       const errorText = await resp.text().catch(() => 'Unable to read error response');
@@ -184,14 +151,32 @@ async function fetchHowloud(address?: string): Promise<{ score?: number; label: 
       });
       return null;
     }
+    
     const data = await resp.json();
-    console.log('[pro-recap] Howloud: response', { dataKeys: Object.keys(data || {}), dataType: typeof data });
-    // Expecting shape: { score: number, ... } — tolerate variants
-    const score = typeof data?.score === 'number' ? data.score : Number(data?.Soundscore ?? data?.soundscore);
+    console.log('[pro-recap] Howloud: response', { 
+      status: data?.status,
+      hasResult: !!data?.result,
+      isResultArray: Array.isArray(data?.result),
+      resultLength: Array.isArray(data?.result) ? data.result.length : 0,
+      dataKeys: Object.keys(data || {}),
+      resultKeys: Array.isArray(data?.result) && data.result[0] ? Object.keys(data.result[0]) : []
+    });
+    
+    // Response format: { "status": "OK", "result": [ { "score": 80, ... } ] }
+    // Note: result is an array with one element
+    const resultItem = Array.isArray(data?.result) && data.result.length > 0 ? data.result[0] : data?.result;
+    const score = resultItem?.score;
+    
     if (!Number.isFinite(score)) {
-      console.warn('[pro-recap] Howloud: invalid score', { data, extractedScore: score });
+      console.warn('[pro-recap] Howloud: invalid score', { 
+        data, 
+        extractedScore: score,
+        resultItem,
+        resultItemKeys: resultItem ? Object.keys(resultItem) : []
+      });
       return null;
     }
+    
     console.log('[pro-recap] Howloud: success', { score, label: soundLabel(score) });
     return { score, label: soundLabel(score) };
   } catch (err) {
@@ -389,57 +374,211 @@ async function fetchAirQuality(lat?: number, lon?: number): Promise<{ score?: nu
   }
 }
 
-// Returns stargazing score (inverse of light pollution)
-// High stargazing score = low light pollution
+// Returns stargazing score based on Bortle scale
+// New mapping:
+// 1–2.99: Excellent (98)
+// 3-3.99: Good (85)
+// 4-4.99: Okay (70)
+// 5–6.99: Not Great (45)
+// 7–9: Not Good (20)
 function stargazingScoreFromBortle(b?: number) {
   if (b == null || !Number.isFinite(b)) return undefined;
-  if (b <= 1) return 98; // Excellent stargazing
-  if (b <= 2) return 94;
-  if (b <= 3) return 88;
-  if (b <= 4) return 72;
-  if (b <= 5) return 56;
-  if (b <= 6) return 40;
-  if (b <= 7) return 25;
-  if (b <= 8) return 15;
-  return 8; // Poor stargazing
+  if (b <= 2.99) return 98; // Excellent
+  if (b <= 3.99) return 85; // Good
+  if (b <= 4.99) return 70; // Okay
+  if (b <= 6.99) return 45; // Not Great
+  return 20; // Not Good (7-9)
 }
 
-// Returns light pollution score (inverse of stargazing)
-// High light pollution = low stargazing
-function lightPollutionScoreFromBortle(b?: number) {
-  if (b == null || !Number.isFinite(b)) return undefined;
-  const stargazing = stargazingScoreFromBortle(b);
-  return stargazing != null ? 100 - stargazing : undefined;
+// Map Bortle value to stargazing label
+function bortleToStargazingLabel(b?: number): string {
+  if (b == null || !Number.isFinite(b)) return 'Unknown';
+  if (b <= 2.99) return 'Excellent';
+  if (b <= 3.99) return 'Good';
+  if (b <= 4.99) return 'Okay';
+  if (b <= 6.99) return 'Not Great';
+  return 'Not Good'; // 7-9
 }
 
-// Map light pollution category to stargazing label (inverse relationship)
-function categoryToStargazingLabel(category?: string): string {
-  if (!category) return 'Unknown';
-  const normalized = category.trim();
-  const mapping: Record<string, string> = {
-    'Excellent': 'Not Good',
-    'Good': 'Not Great',
-    'Okay': 'Okay',
-    'High': 'Not Great',
-    'Very High': 'Not Good',
-    'Low': 'Good',
-    'Very Low': 'Excellent',
-  };
-  return mapping[normalized] || 'Unknown';
-}
-
-async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?: number; label: string; stargazingScore?: number; stargazingLabel?: string } | null> {
+async function fetchLightPollution(lat?: number, lon?: number): Promise<{ stargazingScore?: number; stargazingLabel?: string } | null> {
   if (lat == null || lon == null) {
     console.warn('[pro-recap] LightPollutionMap: missing coords', { lat, lon });
     return null;
   }
   try {
+    // Use the API endpoint directly instead of scraping HTML
+    // The site calls this API when loading: /api/lightpollution?lat={lat}&lon={lon}
+    const apiUrl = `https://lightpollutionmap.app/api/lightpollution?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+    console.log('[pro-recap] LightPollutionMap: fetching API', { lat, lon, url: apiUrl });
+    
+    const resp = await fetch(apiUrl, { 
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://lightpollutionmap.app/',
+        'Origin': 'https://lightpollutionmap.app'
+      } 
+    });
+    
+    // Try to parse response as JSON first, even if status is not ok
+    let data: any;
+    const contentType = resp.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    
+    if (isJson) {
+      try {
+        data = await resp.json();
+      } catch (e) {
+        const errorText = await resp.text().catch(() => 'Unable to read error response');
+        console.warn('[pro-recap] LightPollutionMap: Failed to parse JSON response', { 
+          status: resp.status, 
+          statusText: resp.statusText,
+          errorBody: errorText.substring(0, 500),
+          parseError: (e as Error)?.message
+        });
+        return fetchLightPollutionFallback(lat, lon);
+      }
+    } else {
+      const errorText = await resp.text().catch(() => 'Unable to read error response');
+      console.warn('[pro-recap] LightPollutionMap: API returned non-JSON response', { 
+        status: resp.status, 
+        statusText: resp.statusText,
+        contentType,
+        errorBody: errorText.substring(0, 500)
+      });
+      return fetchLightPollutionFallback(lat, lon);
+    }
+    
+    // Check if response indicates an error
+    if (!resp.ok || data?.error) {
+      console.warn('[pro-recap] LightPollutionMap: API error response', { 
+        status: resp.status, 
+        statusText: resp.statusText,
+        error: data?.error,
+        message: data?.message,
+        code: data?.code,
+        fullResponse: JSON.stringify(data).substring(0, 500)
+      });
+      
+      // If it's an access denied error, try HTML scraping
+      if (data?.code === 'CORS_BLOCKED' || data?.error === 'Access denied' || resp.status === 403) {
+        console.log('[pro-recap] LightPollutionMap: API access denied, falling back to HTML scraping');
+        return fetchLightPollutionFallback(lat, lon);
+      }
+      
+      // For other errors, still try to extract data if present
+      if (!data?.bortle && !data?.bortleScale) {
+        return fetchLightPollutionFallback(lat, lon);
+      }
+    }
+    console.log('[pro-recap] LightPollutionMap: API response received', { 
+      status: resp.status,
+      statusOk: resp.ok,
+      dataKeys: Object.keys(data || {}),
+      dataType: typeof data,
+      hasBortle: 'bortle' in (data || {}),
+      fullResponse: JSON.stringify(data).substring(0, 1000)
+    });
+    
+    // Extract Bortle value from JSON response
+    // Try various possible field names (bortle, bortleScale, pollution, etc.)
+    let bortle: number | undefined;
+    let category: string | undefined;
+    
+    // Direct bortle field
+    if (typeof data?.bortle === 'number') {
+      bortle = data.bortle;
+    } else if (typeof data?.bortleScale === 'number') {
+      bortle = data.bortleScale;
+    } else if (typeof data?.pollution?.bortle === 'number') {
+      bortle = data.pollution.bortle;
+    } else if (typeof data?.data?.bortle === 'number') {
+      bortle = data.data.bortle;
+    } else if (typeof data?.result?.bortle === 'number') {
+      bortle = data.result.bortle;
+    }
+    
+    // Extract category/label if available
+    if (typeof data?.category === 'string') {
+      category = data.category;
+    } else if (typeof data?.label === 'string') {
+      category = data.label;
+    } else if (typeof data?.pollution?.category === 'string') {
+      category = data.pollution.category;
+    } else if (typeof data?.data?.category === 'string') {
+      category = data.data.category;
+    }
+    
+    // Validate Bortle is in reasonable range (1-9) and round to 2 decimal places
+    let finalBortle: number | undefined;
+    if (bortle != null && Number.isFinite(bortle)) {
+      if (bortle >= 1 && bortle <= 9) {
+        // Round to 2 decimal places for display
+        finalBortle = Math.round(bortle * 100) / 100;
+      } else {
+        console.warn('[pro-recap] LightPollutionMap: Bortle value out of range', { 
+          bortle, 
+          expectedRange: '1-9',
+          data
+        });
+      }
+    }
+    
+    // If no valid Bortle found in API response
+    if (!finalBortle) {
+      console.warn('[pro-recap] LightPollutionMap: Could not extract valid Bortle from API response', {
+        data,
+        dataKeys: Object.keys(data || {}),
+        hasBortle: 'bortle' in (data || {}),
+        note: 'API response structure may be different than expected. Falling back to HTML scraping.'
+      });
+      // Fall back to HTML scraping
+      return fetchLightPollutionFallback(lat, lon);
+    }
+    
+    console.log('[pro-recap] LightPollutionMap: parsed from API', { 
+      bortle: finalBortle, 
+      category,
+      isValid: finalBortle != null && finalBortle >= 1 && finalBortle <= 9
+    });
+    
+    // Calculate stargazing score and label from Bortle value
+    const stargazingScore = stargazingScoreFromBortle(finalBortle);
+    const stargazingLabel = bortleToStargazingLabel(finalBortle);
+    
+    console.log('[pro-recap] LightPollutionMap: success', { 
+      stargazingLabel,
+      stargazingScore, 
+      bortle: finalBortle,
+      category
+    });
+    
+    return { 
+      stargazingScore,
+      stargazingLabel
+    };
+  } catch (err) {
+    console.error('[pro-recap] LightPollutionMap: fetch error', { error: err, message: (err as Error)?.message });
+    // Fall back to HTML scraping if API call fails
+    return fetchLightPollutionFallback(lat, lon);
+  }
+}
+
+/**
+ * Fallback function to scrape HTML from lightpollutionmap.app
+ * Used when API endpoint is unavailable or returns unexpected structure
+ */
+async function fetchLightPollutionFallback(lat?: number, lon?: number): Promise<{ stargazingScore?: number; stargazingLabel?: string } | null> {
+  if (lat == null || lon == null) {
+    return null;
+  }
+  try {
     const url = `${LPM_BASE}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lon)}`;
-    console.log('[pro-recap] LightPollutionMap: fetching', { lat, lon, url });
+    console.log('[pro-recap] LightPollutionMap: fallback HTML scraping', { lat, lon, url });
     const resp = await fetch(url, { headers: { 'User-Agent': 'NestRecon/1.0' } });
     if (!resp.ok) {
       const errorText = await resp.text().catch(() => 'Unable to read error response');
-      console.warn('[pro-recap] LightPollutionMap: API error', { 
+      console.warn('[pro-recap] LightPollutionMap: HTML fallback error', { 
         status: resp.status, 
         statusText: resp.statusText,
         errorBody: errorText.substring(0, 500)
@@ -447,7 +586,7 @@ async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?
       return null;
     }
     const html = await resp.text();
-    console.log('[pro-recap] LightPollutionMap: response received', { htmlLength: html.length });
+    console.log('[pro-recap] LightPollutionMap: HTML response received', { htmlLength: html.length });
     
     // Parse category text from id="pollution-category" (e.g., "High")
     const pollutionCategoryMatch = html.match(/id=["']pollution-category["'][^>]*>([^<]+)</i);
@@ -456,13 +595,11 @@ async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?
     // Parse Bortle value using multiple methods
     let bortle: number | undefined;
     let bortleValue: string | undefined;
-    let matchedSnippet: string | undefined;
     
     // Method 1: Try id="pollution-value" element (e.g., "7.4" or "6.2")
     const pollutionValueMatch = html.match(/id=["']pollution-value["'][^>]*>([^<]+)</i);
     if (pollutionValueMatch) {
       bortleValue = pollutionValueMatch[1].trim();
-      matchedSnippet = pollutionValueMatch[0];
       // Skip if value is "--" (data not loaded yet) or empty
       if (bortleValue && bortleValue !== '--' && bortleValue !== '') {
         // Extract number from the value (handles "7.4", "6.2", etc.)
@@ -473,64 +610,99 @@ async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?
       }
     }
     
-    // Method 1b: Look for JSON data in script tags (page might embed data)
+    // Method 2: Look for embedded JSON data in script tags (more comprehensive search)
     if (!bortle || !Number.isFinite(bortle)) {
-      // Look for JSON objects with bortle or pollution data
-      const jsonMatches = html.match(/<script[^>]*>[\s\S]*?({[^}]*bortle[^}]*})[\s\S]*?<\/script>/i);
-      if (jsonMatches) {
-        try {
-          const jsonData = JSON.parse(jsonMatches[1]);
-          if (jsonData.bortle != null) {
-            bortle = Number(jsonData.bortle);
-            bortleValue = String(jsonData.bortle);
-            matchedSnippet = jsonMatches[1];
-          }
-        } catch (e) {
-          // JSON parse failed, continue
-        }
-      }
-      
-      // Also try looking for window.__INITIAL_STATE__ or similar patterns
-      const stateMatch = html.match(/window\.__[A-Z_]+__\s*=\s*({[\s\S]*?});/i);
-      if (stateMatch && !bortle) {
-        try {
-          const state = JSON.parse(stateMatch[1]);
-          // Look for bortle in nested objects
-          const findBortle = (obj: any): number | undefined => {
-            if (typeof obj !== 'object' || obj === null) return undefined;
-            if (typeof obj.bortle === 'number') return obj.bortle;
-            if (typeof obj.pollution?.bortle === 'number') return obj.pollution.bortle;
-            for (const key in obj) {
-              const found = findBortle(obj[key]);
-              if (found != null) return found;
+      // Look for any script tag containing JSON with bortle data
+      const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+      if (scriptMatches) {
+        for (const script of scriptMatches) {
+          // Try to find JSON objects with bortle
+          const jsonMatches = script.match(/{[^{}]*bortle[^{}]*}/i);
+          if (jsonMatches) {
+            try {
+              const jsonData = JSON.parse(jsonMatches[0]);
+              if (typeof jsonData.bortle === 'number') {
+                bortle = jsonData.bortle;
+                bortleValue = String(jsonData.bortle);
+                break;
+              }
+            } catch (e) {
+              // Try to extract bortle value directly from the script
+              const bortleNumMatch = script.match(/bortle["\s:]*([0-9]+(?:\.[0-9]+)?)/i);
+              if (bortleNumMatch) {
+                const matchedValue = Number(bortleNumMatch[1]);
+                if (matchedValue >= 1 && matchedValue <= 9) {
+                  bortle = matchedValue;
+                  bortleValue = bortleNumMatch[1];
+                  break;
+                }
+              }
             }
-            return undefined;
-          };
-          const foundBortle = findBortle(state);
-          if (foundBortle != null) {
-            bortle = foundBortle;
-            bortleValue = String(foundBortle);
-            matchedSnippet = stateMatch[1].substring(0, 200);
           }
-        } catch (e) {
-          // JSON parse failed, continue
+          
+          // Also look for lat/lon coordinates and bortle in the same context
+          const coordBortleMatch = script.match(new RegExp(`${lat}[^}]*bortle[^}]*([0-9]+(?:\\.[0-9]+)?)`, 'i'));
+          if (coordBortleMatch && !bortle) {
+            const matchedValue = Number(coordBortleMatch[1]);
+            if (matchedValue >= 1 && matchedValue <= 9) {
+              bortle = matchedValue;
+              bortleValue = coordBortleMatch[1];
+              break;
+            }
+          }
         }
       }
     }
     
-    // Method 2: If Method 1 failed, try looking for "Bortle" followed by number (but avoid meta tags)
+    // Method 3: Look for window.__INITIAL_STATE__ or similar patterns with full object parsing
     if (!bortle || !Number.isFinite(bortle)) {
-      // Look for Bortle in content, but exclude matches in meta tags
-      // Split by potential meta tag boundaries and search in content sections
+      const statePatterns = [
+        /window\.__[A-Z_]+__\s*=\s*({[\s\S]*?});/i,
+        /const\s+\w+\s*=\s*({[\s\S]*?});/i,
+        /let\s+\w+\s*=\s*({[\s\S]*?});/i,
+        /var\s+\w+\s*=\s*({[\s\S]*?});/i
+      ];
+      
+      for (const pattern of statePatterns) {
+        const stateMatch = html.match(pattern);
+        if (stateMatch) {
+          try {
+            const state = JSON.parse(stateMatch[1]);
+            // Recursively search for bortle in the state object
+            const findBortle = (obj: any, depth = 0): number | undefined => {
+              if (depth > 10) return undefined; // Prevent infinite recursion
+              if (typeof obj !== 'object' || obj === null) return undefined;
+              if (typeof obj.bortle === 'number' && obj.bortle >= 1 && obj.bortle <= 9) return obj.bortle;
+              if (typeof obj.bortleScale === 'number' && obj.bortleScale >= 1 && obj.bortleScale <= 9) return obj.bortleScale;
+              if (typeof obj.pollution?.bortle === 'number') return obj.pollution.bortle;
+              for (const key in obj) {
+                const found = findBortle(obj[key], depth + 1);
+                if (found != null) return found;
+              }
+              return undefined;
+            };
+            const foundBortle = findBortle(state);
+            if (foundBortle != null) {
+              bortle = foundBortle;
+              bortleValue = String(foundBortle);
+              break;
+            }
+          } catch (e) {
+            // JSON parse failed, continue
+          }
+        }
+      }
+    }
+    
+    // Method 4: Look for "Bortle" followed by number in content (avoid meta tags)
+    if (!bortle || !Number.isFinite(bortle)) {
       const contentSections = html.split(/<meta[^>]*>/i);
       for (const section of contentSections) {
         const bortleMatch = section.match(/Bortle[^0-9]*([0-9]+(?:\.[0-9]+)?)/i);
         if (bortleMatch) {
           const matchedValue = Number(bortleMatch[1]);
-          // Only use if in valid range (1-9) to avoid matching years like "2024"
           if (matchedValue >= 1 && matchedValue <= 9) {
             bortle = matchedValue;
-            matchedSnippet = bortleMatch[0];
             bortleValue = bortleMatch[1];
             break;
           }
@@ -538,32 +710,12 @@ async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?
       }
     }
     
-    // Method 3: Try looking for number in the pollution section context (avoid meta tags)
-    if (!bortle || !Number.isFinite(bortle)) {
-      // Look for pattern like "7.4 BORTLE" but only in pollution-related sections
-      const pollutionSection = html.match(/pollution[^>]*>[\s\S]{0,500}([0-9]+(?:\.[0-9]+)?)\s*BORTLE/i);
-      if (pollutionSection) {
-        const matchedValue = Number(pollutionSection[1]);
-        if (matchedValue >= 1 && matchedValue <= 9) {
-          bortle = matchedValue;
-          matchedSnippet = pollutionSection[0];
-          bortleValue = pollutionSection[1];
-        }
-      }
-    }
-    
-    // Validate Bortle is in reasonable range (1-9)
+    // Validate Bortle is in reasonable range (1-9) and round to 2 decimal places
     let finalBortle: number | undefined;
     if (bortle != null && Number.isFinite(bortle)) {
       if (bortle >= 1 && bortle <= 9) {
-        finalBortle = bortle;
-      } else {
-        console.warn('[pro-recap] LightPollutionMap: Bortle value out of range', { 
-          bortle, 
-          bortleValue,
-          matchedSnippet,
-          expectedRange: '1-9'
-        });
+        // Round to 2 decimal places for display
+        finalBortle = Math.round(bortle * 100) / 100;
       }
     }
     
@@ -571,78 +723,69 @@ async function fetchLightPollution(lat?: number, lon?: number): Promise<{ score?
     if (!finalBortle) {
       const hasPlaceholder = bortleValue === '--' || category === '--';
       if (hasPlaceholder) {
-        // This is expected - the page loads data dynamically via JavaScript
-        // We can't wait for it in a server-side fetch, so we'll skip scoring
         console.log('[pro-recap] LightPollutionMap: Data not loaded yet (shows "--"), page uses JavaScript to load data', {
           bortleValue,
           category,
-          note: 'Light pollution data loads dynamically via JavaScript. The initial HTML does not contain the actual values. This is expected behavior.'
+          note: 'Light pollution data loads dynamically via JavaScript. The initial HTML does not contain the actual values.'
         });
-        // Return null gracefully - this is not an error, just unavailable data
         return null;
-      } else {
-        console.warn('[pro-recap] LightPollutionMap: Could not parse valid Bortle value', {
-          bortleValue,
-          matchedSnippet,
-          category,
-          pollutionValueMatch: pollutionValueMatch?.[0],
-          pollutionCategoryMatch: pollutionCategoryMatch?.[0],
-          htmlSnippet: html.substring(Math.max(0, html.indexOf('pollution-value') - 200), Math.min(html.length, html.indexOf('pollution-value') + 400))
-        });
       }
     }
     
-    console.log('[pro-recap] LightPollutionMap: parsed', { 
-      bortleValue, 
-      bortle: finalBortle, 
-      category,
-      matchedSnippet,
-      pollutionValueMatch: pollutionValueMatch?.[0],
-      pollutionCategoryMatch: pollutionCategoryMatch?.[0],
-      isValid: finalBortle != null && finalBortle >= 1 && finalBortle <= 9
-    });
-    
-    // Use category text directly for light pollution label, or fallback to Bortle value
-    const lightLabel = category || (finalBortle ? `Bortle ${finalBortle}` : 'Unknown');
-    
-    // Calculate scores only if we have a valid Bortle value
-    let stargazingScore: number | undefined;
-    let lightPollutionScore: number | undefined;
-    
-    if (finalBortle != null && finalBortle >= 1 && finalBortle <= 9) {
-      stargazingScore = stargazingScoreFromBortle(finalBortle);
-      lightPollutionScore = lightPollutionScoreFromBortle(finalBortle);
-    } else {
-      console.warn('[pro-recap] LightPollutionMap: Skipping score calculation due to invalid Bortle', {
-        finalBortle,
-        category,
-        lightLabel
+    if (!finalBortle) {
+      console.warn('[pro-recap] LightPollutionMap: Could not parse valid Bortle from HTML', {
+        bortleValue,
+        category
       });
+      return null;
     }
     
-    // Get inverse stargazing label from category
-    const stargazingLabel = categoryToStargazingLabel(category);
+    // Calculate stargazing score and label from Bortle value
+    const stargazingScore = stargazingScoreFromBortle(finalBortle);
+    const stargazingLabel = bortleToStargazingLabel(finalBortle);
     
-    console.log('[pro-recap] LightPollutionMap: success', { 
-      lightLabel, 
+    console.log('[pro-recap] LightPollutionMap: fallback success', { 
       stargazingLabel,
       stargazingScore, 
-      lightPollutionScore,
-      bortle: finalBortle,
-      category,
-      hasValidBortle: finalBortle != null && finalBortle >= 1 && finalBortle <= 9
+      bortle: finalBortle
     });
     
     return { 
-      score: lightPollutionScore, 
-      label: lightLabel, 
       stargazingScore,
       stargazingLabel
     };
   } catch (err) {
-    console.error('[pro-recap] LightPollutionMap: fetch error', { error: err, message: (err as Error)?.message });
+    console.error('[pro-recap] LightPollutionMap: fallback error', { error: err, message: (err as Error)?.message });
     return null;
   }
+}
+
+/**
+ * Maps distance to nearest POI to a 0-10 score using a sweet spot curve.
+ * Uses the closest result for each target to define the score.
+ * 
+ * Scoring curve:
+ * - d ≤ 0.1 mi: 7 (Very close, possible nuisance)
+ * - 0.1 < d ≤ 0.5 mi: 9 (Close and convenient)
+ * - 0.5 < d ≤ 2 mi: 10 (Sweet spot - ideal)
+ * - 2 < d ≤ 5 mi: 8 (Convenient)
+ * - 5 < d ≤ 10 mi: 6 (Somewhat far)
+ * - 10 < d ≤ 15 mi: 4 (Far)
+ * - d > 15 mi: 2 (Very far)
+ */
+function distanceToTargetScore(distanceMiles: number | null): number {
+  if (distanceMiles == null || !Number.isFinite(distanceMiles)) {
+    return 2; // Default to poor score if distance unknown
+  }
+  
+  const d = distanceMiles;
+  if (d <= 0.1) return 7;      // Very close (possible nuisance)
+  if (d <= 0.5) return 9;      // Close and convenient
+  if (d <= 2) return 10;       // Sweet spot
+  if (d <= 5) return 8;        // Convenient
+  if (d <= 10) return 6;       // Somewhat far
+  if (d <= 15) return 4;       // Far
+  return 2;                    // Very far
 }
 
 function scoreTarget(t: EvaluatedTarget): number {
@@ -651,13 +794,9 @@ function scoreTarget(t: EvaluatedTarget): number {
     return 2; // Low score for no results
   }
   
-  if (t.distanceMiles == null) return 3;
-  const d = t.distanceMiles;
-  const max = t.maxDistanceMiles;
-  if (d <= max) return 10;
-  if (d <= max * 1.5) return 7;
-  if (d <= max * 2) return 5;
-  return 2;
+  // Use the closest POI's distance (first result is already sorted by distance)
+  // Apply the new distance-based scoring curve
+  return distanceToTargetScore(t.distanceMiles);
 }
 
 function to0to10(value0to100?: number) {
@@ -703,7 +842,23 @@ function scoreSchools(schools?: { score: number }[]) {
   return vals.length ? avg(vals) : 5;
 }
 
-function scoreMobilityPro(mob?: ListingPayload['mobility'], signals?: MobilitySignal[]) {
+/**
+ * Scores mobility for Free users - uses ALL available mobility signals.
+ * This gives a generic score that doesn't depend on user preferences.
+ */
+function scoreMobilityFree(mob?: ListingPayload['mobility']) {
+  const scores: number[] = [];
+  if (mob?.walk != null) scores.push(to0to10(mob.walk)!);
+  if (mob?.bike != null) scores.push(to0to10(mob.bike)!);
+  if (mob?.transit != null) scores.push(to0to10(mob.transit)!);
+  return scores.length ? avg(scores) : 5;
+}
+
+/**
+ * Scores mobility for Pro users - only uses signals the user selected.
+ * If user checked Walk + Bike, only those are scored. Transit is ignored if not selected.
+ */
+function scoreMobilityFit(mob?: ListingPayload['mobility'], signals?: MobilitySignal[]) {
   const sel: number[] = [];
   const include = new Set(signals || []);
   if (include.has('walk') && mob?.walk != null) sel.push(to0to10(mob.walk)!);
@@ -712,16 +867,36 @@ function scoreMobilityPro(mob?: ListingPayload['mobility'], signals?: MobilitySi
   return sel.length ? avg(sel) : 5;
 }
 
-function scoreAmenities(targets?: EvaluatedTarget[]) {
-  if (!targets || !targets.length) return { amenitiesScore: 5, targetScores: [] as number[] };
+/**
+ * Scores targets fit for Pro users with coverage modifier.
+ * Applies a penalty when targets are not found (makes Pro score feel more personalized).
+ * 
+ * Coverage modifier:
+ * - coverage = foundTargets / totalTargets (0-1)
+ * - coverageBoost = 0.85 + 0.15 * coverage (0.85-1.0)
+ * - targetsFitScore *= coverageBoost
+ * 
+ * So if Mapbox fails to find a category, the Pro score visibly drops.
+ */
+function scoreTargetsFit(targets?: EvaluatedTarget[]): number {
+  if (!targets || !targets.length) return 3; // Unknown/no result
+  
   const scores = targets.map(scoreTarget);
-  return { amenitiesScore: avg(scores), targetScores: scores };
+  const meanScore = avg(scores);
+  
+  // Calculate coverage: how many targets were found (have places)
+  const foundTargets = targets.filter(t => t.places && t.places.length > 0).length;
+  const totalTargets = targets.length;
+  const coverage = totalTargets > 0 ? foundTargets / totalTargets : 0;
+  
+  // Apply coverage modifier: 0.85-1.0 boost based on how many targets were found
+  const coverageBoost = 0.85 + 0.15 * coverage;
+  const targetsFitScore = meanScore * coverageBoost;
+  
+  return clamp(targetsFitScore, 0, 10);
 }
 
-function alignFromScore(score0to10: number) {
-  const x = clamp(score0to10, 0, 10) / 10;
-  return 0.5 + 0.5 * x; // 0.5 (bad) -> 1.0 (perfect)
-}
+
 
 async function findPlacesNearby(
   origin: { lat: number; lon: number },
@@ -734,19 +909,21 @@ async function findPlacesNearby(
   }
   
   try {
-    // Use Mapbox Geocoding API to find places
+    // Use Mapbox Search Box API to find POIs (Points of Interest)
     // Note: Mapbox uses lon,lat order (opposite of Google Maps)
-    const encodedQuery = encodeURIComponent(query);
-    const searchUrl = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json`);
+    // Use customer's exact query text - no conversion needed
+    const searchUrl = new URL('https://api.mapbox.com/search/searchbox/v1/forward');
+    searchUrl.searchParams.set('q', query); // Customer's exact search terms
+    searchUrl.searchParams.set('types', 'poi'); // Only return POIs, not addresses
     searchUrl.searchParams.set('proximity', `${origin.lon},${origin.lat}`); // lon,lat order
-    searchUrl.searchParams.set('limit', maxResults.toString());
+    searchUrl.searchParams.set('limit', Math.max(maxResults, 5).toString()); // Get enough results for top matches
     searchUrl.searchParams.set('access_token', MAPBOX_ACCESS_TOKEN);
     
-    console.log('[pro-recap] Mapbox Geocoding: fetching', { query, origin, maxResults, hasToken: !!MAPBOX_ACCESS_TOKEN });
+    console.log('[pro-recap] Mapbox Search Box: fetching POIs', { query, origin, maxResults, hasToken: !!MAPBOX_ACCESS_TOKEN });
     const searchResp = await fetch(searchUrl.toString());
     if (!searchResp.ok) {
       const errorText = await searchResp.text().catch(() => 'Unable to read error response');
-      console.warn('[pro-recap] Mapbox Geocoding: API error', { 
+      console.warn('[pro-recap] Mapbox Search Box: API error', { 
         status: searchResp.status, 
         statusText: searchResp.statusText,
         errorBody: errorText.substring(0, 500)
@@ -755,33 +932,88 @@ async function findPlacesNearby(
     }
     
     const searchData = await searchResp.json();
-    console.log('[pro-recap] Mapbox Geocoding: response', { 
-      resultsCount: searchData.features?.length || 0 
+    console.log('[pro-recap] Mapbox Search Box: response', { 
+      resultsCount: searchData.features?.length || 0,
+      hasFeatures: !!searchData.features,
+      responseKeys: Object.keys(searchData),
+      firstFeatureKeys: searchData.features?.[0] ? Object.keys(searchData.features[0]) : [],
+      firstFeatureStructure: searchData.features?.[0] ? {
+        hasGeometry: !!searchData.features[0].geometry,
+        geometryType: searchData.features[0].geometry?.type,
+        hasCoordinates: !!searchData.features[0].geometry?.coordinates,
+        coordinates: searchData.features[0].geometry?.coordinates,
+        hasCenter: !!searchData.features[0].center,
+        center: searchData.features[0].center,
+        hasProperties: !!searchData.features[0].properties,
+        propertiesKeys: searchData.features[0].properties ? Object.keys(searchData.features[0].properties) : []
+      } : null
     });
     
     if (!searchData.features || searchData.features.length === 0) {
-      console.warn('[pro-recap] Mapbox Geocoding: no results', { query });
+      console.warn('[pro-recap] Mapbox Search Box: no results', { query, responseData: searchData });
       return [];
     }
     
-    // Take up to maxResults places
-    const places = searchData.features.slice(0, maxResults);
+    // Take all results for distance filtering (we'll filter by distance later)
+    const places = searchData.features;
     
     // Extract coordinates (Mapbox uses [lon, lat] in coordinates array)
-    const placeCoords = places.map(p => {
+    const placeCoords = places.map((p, idx) => {
       const coords = p.geometry?.coordinates || p.center || [];
-      return { lon: coords[0], lat: coords[1] };
+      const extracted = { lon: coords[0], lat: coords[1] };
+      console.log(`[pro-recap] Mapbox Search Box: place ${idx} coordinates`, {
+        hasGeometry: !!p.geometry,
+        hasCoordinates: !!p.geometry?.coordinates,
+        coordinates: p.geometry?.coordinates,
+        hasCenter: !!p.center,
+        center: p.center,
+        extracted: extracted,
+        isValid: Number.isFinite(extracted.lon) && Number.isFinite(extracted.lat)
+      });
+      return extracted;
     });
+    
+    // Filter out invalid coordinates
+    const validCoords = placeCoords.filter(c => Number.isFinite(c.lon) && Number.isFinite(c.lat));
+    console.log('[pro-recap] Mapbox Search Box: coordinate extraction', {
+      totalPlaces: places.length,
+      validCoords: validCoords.length,
+      invalidCoords: placeCoords.length - validCoords.length
+    });
+    
+    if (validCoords.length === 0) {
+      console.warn('[pro-recap] Mapbox Search Box: no valid coordinates extracted', {
+        places: places.map(p => ({
+          hasGeometry: !!p.geometry,
+          geometry: p.geometry,
+          hasCenter: !!p.center,
+          center: p.center
+        }))
+      });
+      return [];
+    }
     
     // Calculate distances using Mapbox Matrix API
     // Format: {lon1},{lat1};{lon2},{lat2};...
-    const coordinates = `${origin.lon},${origin.lat};${placeCoords.map(c => `${c.lon},${c.lat}`).join(';')}`;
-    const matrixUrl = new URL(`https://api.mapbox.com/directions-matrix/v1/mapbox/driving/${coordinates}`);
+    // Only use places with valid coordinates
+    const validPlaces = places.filter((p, idx) => {
+      const coords = p.geometry?.coordinates || p.center || [];
+      return Number.isFinite(coords[0]) && Number.isFinite(coords[1]);
+    });
+    
+    // Matrix API format: origin;dest1;dest2;...
+    // distances[0] will be [0, dist1, dist2, ...] where 0 is origin-to-origin
+    // So we need to skip the first element (index 0) when matching to places
+    const coordinates = `${origin.lon},${origin.lat};${validCoords.map(c => `${c.lon},${c.lat}`).join(';')}`;
+    const matrixUrl = new URL(`https://api.mapbox.com/directions-matrix/v1/mapbox/driving-traffic/${coordinates}`);
     matrixUrl.searchParams.set('access_token', MAPBOX_ACCESS_TOKEN);
+    matrixUrl.searchParams.set('annotations', 'distance,duration'); // Request distances and durations for complete routing data
     
     console.log('[pro-recap] Mapbox Matrix: fetching', { 
       origin: `${origin.lon},${origin.lat}`, 
-      destinationsCount: places.length 
+      destinationsCount: validCoords.length,
+      coordinatesString: coordinates.substring(0, 200) + '...',
+      matrixUrl: matrixUrl.toString().substring(0, 200) + '...'
     });
     const matrixResp = await fetch(matrixUrl.toString());
     if (!matrixResp.ok) {
@@ -792,46 +1024,132 @@ async function findPlacesNearby(
         errorBody: errorText.substring(0, 500)
       });
       // Return places without distances if distance calculation fails
-      return places.map((p) => {
+      return validPlaces.map((p) => {
         const coords = p.geometry?.coordinates || p.center || [];
         const lat = coords[1] || 0;
         const lon = coords[0] || 0;
+        const placeName = p.properties?.name || p.place_name || p.text || 'Unknown';
+        const placeAddress = p.properties?.full_address || p.properties?.address || p.place_name || 'Address not available';
         return {
-          name: p.place_name || p.text || 'Unknown',
-          address: p.place_name || p.properties?.address || 'Address not available',
+          name: placeName,
+          address: placeAddress,
           distanceMiles: 0, // Will be marked as unknown
-          googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-          placeId: p.id
+          googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`,
+          placeId: p.id || p.properties?.mapbox_id
         };
       });
     }
     
     const matrixData = await matrixResp.json();
     console.log('[pro-recap] Mapbox Matrix: response', { 
-      distancesCount: matrixData.distances?.[0]?.length || 0
+      hasDistances: !!matrixData.distances,
+      hasDurations: !!matrixData.durations,
+      distancesCount: matrixData.distances?.[0]?.length || 0,
+      durationsCount: matrixData.durations?.[0]?.length || 0,
+      distancesStructure: matrixData.distances ? {
+        isArray: Array.isArray(matrixData.distances),
+        length: matrixData.distances.length,
+        firstElementIsArray: Array.isArray(matrixData.distances[0]),
+        firstElementLength: matrixData.distances[0]?.length,
+        sampleDistances: matrixData.distances[0]?.slice(0, 3)
+      } : null,
+      durationsStructure: matrixData.durations ? {
+        isArray: Array.isArray(matrixData.durations),
+        length: matrixData.durations.length,
+        firstElementIsArray: Array.isArray(matrixData.durations[0]),
+        firstElementLength: matrixData.durations[0]?.length,
+        sampleDurations: matrixData.durations[0]?.slice(0, 3)
+      } : null,
+      fullResponseKeys: Object.keys(matrixData),
+      code: matrixData.code
     });
     
     // Build results with distances
-    // Mapbox Matrix returns distances[0] as array of distances from origin to each destination
+    // Mapbox Matrix API returns distances[0] as array: [0, dist1, dist2, ...]
+    // The first element (0) is origin-to-origin distance, so we skip it
+    // distances[0][0] = 0 (origin to origin)
+    // distances[0][1] = distance from origin to first destination
+    // distances[0][2] = distance from origin to second destination, etc.
     const results: PlaceResult[] = [];
     const distances = matrixData.distances?.[0] || [];
     
-    for (let i = 0; i < places.length && i < distances.length; i++) {
-      const place = places[i];
-      const distanceMeters = distances[i];
+    console.log('[pro-recap] Mapbox Matrix: processing results', {
+      validPlacesCount: validPlaces.length,
+      distancesCount: distances.length,
+      expectedCount: validPlaces.length + 1, // +1 for origin-to-origin
+      firstDistance: distances[0], // Should be 0 (origin-to-origin)
+      hasDistances: distances.length > 0
+    });
+    
+    if (distances.length === 0) {
+      console.warn('[pro-recap] Mapbox Matrix: No distances in response, cannot calculate distances. Response structure:', {
+        code: matrixData.code,
+        hasDurations: !!matrixData.durations,
+        responseKeys: Object.keys(matrixData)
+      });
+      // Return places without distances as fallback
+      return validPlaces.map((p) => {
+        const coords = p.geometry?.coordinates || p.center || [];
+        const lat = coords[1] || 0;
+        const lon = coords[0] || 0;
+        const placeName = p.properties?.name || p.place_name || p.text || 'Unknown';
+        const placeAddress = p.properties?.full_address || p.properties?.address || p.place_name || 'Address not available';
+        return {
+          name: placeName,
+          address: placeAddress,
+          distanceMiles: 0, // Will be marked as unknown
+          googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`,
+          placeId: p.id || p.properties?.mapbox_id
+        };
+      });
+    }
+    
+    // Skip first distance (index 0) which is origin-to-origin (0 meters)
+    // Match places[i] with distances[i+1]
+    for (let i = 0; i < validPlaces.length; i++) {
+      const place = validPlaces[i];
+      const distanceIndex = i + 1; // Skip first element (origin-to-origin)
+      const distanceMeters = distances[distanceIndex];
       
-      if (distanceMeters != null && Number.isFinite(distanceMeters)) {
+      // Get coordinates for logging
+      const coords = place.geometry?.coordinates || place.center || [];
+      const placeLat = coords[1] || 0;
+      const placeLon = coords[0] || 0;
+      const placeName = place.properties?.name || place.place_name || place.text || 'Unknown';
+      
+      console.log(`[pro-recap] Mapbox Matrix: processing place ${i}`, {
+        placeName,
+        placeCoordinates: `${placeLat},${placeLon}`,
+        originCoordinates: `${origin.lat},${origin.lon}`,
+        distanceIndex,
+        distanceMeters,
+        distanceMiles: distanceMeters ? (distanceMeters / 1609.34).toFixed(2) : null,
+        isValid: distanceMeters != null && Number.isFinite(distanceMeters),
+        allDistances: distances.slice(0, Math.min(6, distances.length)) // Log first few for debugging
+      });
+      
+      if (distanceMeters != null && Number.isFinite(distanceMeters) && distanceMeters > 0) {
         const miles = distanceMeters / 1609.34; // Convert meters to miles
         const coords = place.geometry?.coordinates || place.center || [];
         const lat = coords[1] || 0;
         const lon = coords[0] || 0;
         
+        // Search Box API response format: features have properties.name, properties.full_address, etc.
+        const placeName = place.properties?.name || place.place_name || place.text || 'Unknown';
+        const placeAddress = place.properties?.full_address || place.properties?.address || place.place_name || 'Address not available';
+        
         results.push({
-          name: place.place_name || place.text || 'Unknown',
-          address: place.place_name || place.properties?.address || 'Address not available',
+          name: placeName,
+          address: placeAddress,
           distanceMiles: miles,
-          googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
-          placeId: place.id
+          googleMapsLink: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeName)}`,
+          placeId: place.id || place.properties?.mapbox_id
+        });
+        
+        console.log(`[pro-recap] Mapbox Matrix: added result ${i}`, {
+          placeName,
+          distanceMiles: miles.toFixed(2),
+          distanceMeters: distanceMeters.toFixed(0)
         });
       }
     }
@@ -839,13 +1157,124 @@ async function findPlacesNearby(
     // Sort by distance (closest first)
     results.sort((a, b) => a.distanceMiles - b.distanceMiles);
     
+    // Helper function to calculate straight-line (haversine) distance in miles
+    function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+      const R = 3959; // Earth's radius in miles
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+    
+    // For the closest result, conditionally use Directions API for more accurate routing distance
+    // Only use Directions API when:
+    // 1. Distance > 5 miles (Matrix API may be less accurate for longer distances)
+    // 2. Matrix distance is > 2x straight-line distance (suggests routing inaccuracy)
+    if (results.length > 0 && results[0].distanceMiles > 0) {
+      const closestResult = results[0];
+      const closestPlace = validPlaces.find(p => {
+        const name = p.properties?.name || p.place_name || p.text || 'Unknown';
+        return name === closestResult.name;
+      });
+      
+      if (closestPlace) {
+        const coords = closestPlace.geometry?.coordinates || closestPlace.center || [];
+        const destLon = coords[0];
+        const destLat = coords[1];
+        
+        // Calculate straight-line distance for validation
+        const straightLineMiles = haversineDistance(origin.lat, origin.lon, destLat, destLon);
+        const matrixMiles = closestResult.distanceMiles;
+        
+        // Determine if we should use Directions API for more accuracy
+        const isLongDistance = matrixMiles > 5;
+        const isPotentiallyInaccurate = matrixMiles > (straightLineMiles * 2);
+        const shouldUseDirections = isLongDistance || isPotentiallyInaccurate;
+        
+        console.log('[pro-recap] Mapbox Matrix: distance validation', {
+          placeName: closestResult.name,
+          matrixDistanceMiles: matrixMiles.toFixed(2),
+          straightLineMiles: straightLineMiles.toFixed(2),
+          ratio: (matrixMiles / straightLineMiles).toFixed(2),
+          isLongDistance,
+          isPotentiallyInaccurate,
+          shouldUseDirections
+        });
+        
+        if (shouldUseDirections) {
+          try {
+            // Use Directions API with driving-traffic profile for more accurate routing
+            const directionsUrl = new URL(`https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${origin.lon},${origin.lat};${destLon},${destLat}`);
+            directionsUrl.searchParams.set('access_token', MAPBOX_ACCESS_TOKEN);
+            directionsUrl.searchParams.set('geometries', 'geojson');
+            
+            console.log('[pro-recap] Mapbox Directions: fetching accurate distance for closest result', {
+              placeName: closestResult.name,
+              origin: `${origin.lat},${origin.lon}`,
+              destination: `${destLat},${destLon}`,
+              reason: isLongDistance ? 'long distance (>5mi)' : 'potentially inaccurate (>2x straight-line)'
+            });
+            
+            const directionsResp = await fetch(directionsUrl.toString());
+            if (directionsResp.ok) {
+              const directionsData = await directionsResp.json();
+              if (directionsData.routes && directionsData.routes.length > 0) {
+                const route = directionsData.routes[0];
+                const accurateDistanceMeters = route.distance;
+                const accurateDistanceMiles = accurateDistanceMeters / 1609.34;
+                
+                const difference = accurateDistanceMiles - matrixMiles;
+                const percentDiff = ((difference / matrixMiles) * 100).toFixed(1);
+                
+                console.log('[pro-recap] Mapbox Directions: distance comparison', {
+                  placeName: closestResult.name,
+                  matrixDistanceMiles: matrixMiles.toFixed(2),
+                  directionsDistanceMiles: accurateDistanceMiles.toFixed(2),
+                  straightLineMiles: straightLineMiles.toFixed(2),
+                  differenceMiles: difference.toFixed(2),
+                  percentDifference: `${percentDiff}%`,
+                  improvement: Math.abs(difference) > 0.5 ? 'significant' : 'minor'
+                });
+                
+                // Update the closest result with more accurate distance
+                closestResult.distanceMiles = accurateDistanceMiles;
+              }
+            } else {
+              console.warn('[pro-recap] Mapbox Directions: API error, using Matrix distance', {
+                status: directionsResp.status,
+                statusText: directionsResp.statusText
+              });
+            }
+          } catch (err) {
+            console.warn('[pro-recap] Mapbox Directions: error fetching accurate distance', {
+              error: err instanceof Error ? err.message : String(err)
+            });
+            // Continue with Matrix API distance if Directions API fails
+          }
+        } else {
+          console.log('[pro-recap] Mapbox Matrix: using Matrix distance (no Directions API needed)', {
+            placeName: closestResult.name,
+            matrixDistanceMiles: matrixMiles.toFixed(2),
+            reason: 'distance ≤ 5mi and ratio ≤ 2x straight-line'
+          });
+        }
+      }
+    }
+    
+    // Limit to maxResults (just return the closest ones)
+    const finalResults = results.slice(0, maxResults);
+    
     console.log('[pro-recap] Mapbox findPlacesNearby: success', { 
       query, 
-      foundCount: results.length,
-      places: results.map(p => ({ name: p.name, distance: p.distanceMiles }))
+      foundCount: finalResults.length,
+      places: finalResults.map(p => ({ name: p.name, distance: p.distanceMiles.toFixed(2) }))
     });
     
-    return results;
+    return finalResults;
   } catch (err) {
     console.error('[pro-recap] Mapbox findPlacesNearby: fetch error', { error: err, message: (err as Error)?.message });
     return [];
@@ -943,7 +1372,7 @@ async function generateAIRecap(
   listing: ListingPayload,
   prefs: UserPrefs,
   targetScores: EvaluatedTarget[],
-  scores: { proRawScore: number; missionFitScore: number }
+  scores: { basicReconScore: number; missionFitScore: number }
 ): Promise<string> {
   if (!OPENAI_API_KEY) {
     console.warn('[pro-recap] OpenAI: missing API key, using fallback');
@@ -972,7 +1401,7 @@ Priorities: ${prioritiesList}
 
 Mobility focus: ${prefs.mobilitySignals?.join(', ') || 'None'}
 
-Environment: ${listing.environment?.sound ? `Sound: ${listing.environment.sound}` : ''} ${listing.environment?.air ? `Air: ${listing.environment.air}` : ''} ${listing.environment?.light ? `Light: ${listing.environment.light}` : ''}
+Environment: ${listing.environment?.sound ? `Sound: ${listing.environment.sound}` : ''} ${listing.environment?.air ? `Air: ${listing.environment.air}` : ''} ${listing.environment?.sky ? `Stargazing: ${listing.environment.sky}` : ''}
 
 ${prefs.extraFocusNotes ? `Additional notes: ${prefs.extraFocusNotes}` : ''}
 
@@ -1038,9 +1467,9 @@ function buildRecapFallback(listing: ListingPayload, prefs: UserPrefs, targetSco
     const lbl = (listing.environment as any).air;
     parts.push(`Air: ${lbl}`);
   }
-  if (listing.environment && 'light' in listing.environment) {
-    const lbl = (listing.environment as any).light;
-    parts.push(`Sky brightness: ${lbl}`);
+  if (listing.environment && 'sky' in listing.environment) {
+    const lbl = (listing.environment as any).sky;
+    parts.push(`Stargazing: ${lbl}`);
   }
 
   if (prefs.extraFocusNotes) {
@@ -1051,59 +1480,98 @@ function buildRecapFallback(listing: ListingPayload, prefs: UserPrefs, targetSco
 }
 
 async function scorePro(listing: ListingPayload, prefs: UserPrefs): Promise<ProResult> {
+  // Calculate component scores (used by both Free and Pro)
   const basicsScore = scoreBasics(listing.basics);
   const schoolsScore = scoreSchools(listing.schools);
-  const { amenitiesScore, targetScores } = scoreAmenities(listing.targets);
-  const mobilityScore = scoreMobilityPro(listing.mobility, prefs.mobilitySignals);
-  const envSoundScore = listing.environment && 'soundScore' in listing.environment ? to0to10((listing.environment as any).soundScore) : undefined;
-  const envAirScore = listing.environment && 'airScore' in listing.environment ? to0to10((listing.environment as any).airScore) : undefined;
-  const envLightScore = listing.environment && 'lightScore' in listing.environment ? to0to10((listing.environment as any).lightScore) : undefined;
-  const envScore = envSoundScore ?? envAirScore ?? envLightScore ?? 5;
-  const commuteScore = to0to10(listing.commuteScore) ?? 5;
+  
+  // ===== FREE SCORE: Basic Recon Score (Generic, preference-agnostic) =====
+  // Formula: Home Basics 40% + Schools 30% + Mobility 20% + Environment 10%
+  // Same score for every user viewing the same listing
+  const mobilityFreeScore = scoreMobilityFree(listing.mobility);
+  const envScore = 5; // Neutral constant for Free score
+  
+  const free0to10 =
+    basicsScore * 0.40 +
+    schoolsScore * 0.30 +
+    mobilityFreeScore * 0.20 +
+    envScore * 0.10;
+  
+  const basicReconScore = Math.round(free0to10 * 10);
+  
+  // ===== PRO SCORE: Mission Fit Score (Personalized) =====
+  // Detect Free vs Pro mode
+  const isProMode = (prefs.placeTargets?.length ?? 0) > 0 || 
+                   (prefs.mobilitySignals?.length ?? 0) > 0;
+  
+  let missionFitScore: number;
+  let targetsFitScore: number | undefined;
+  let mobilityFitScore: number | undefined;
+  const targetScores: number[] = [];
+  
+  if (isProMode) {
+    // Pro mode: Personalized score based on user's Targets and Mobility preferences
+    // Formula: Targets Fit 35% + Mobility Fit 20% + Schools 20% + Home Basics 25%
+    
+    // Calculate targets fit (with coverage modifier)
+    targetsFitScore = scoreTargetsFit(listing.targets);
+    
+    // Calculate mobility fit (only user-selected signals)
+    mobilityFitScore = scoreMobilityFit(listing.mobility, prefs.mobilitySignals);
+    
+    // Get target scores for debug/display
+    if (listing.targets && listing.targets.length > 0) {
+      listing.targets.forEach(t => targetScores.push(scoreTarget(t)));
+    }
+    
+    const pro0to10 =
+      targetsFitScore * 0.35 +
+      mobilityFitScore * 0.20 +
+      schoolsScore * 0.20 +
+      basicsScore * 0.25;
+    
+    missionFitScore = Math.round(pro0to10 * 10);
+    
+    console.log('[pro-recap] Pro mode scoring', {
+      isProMode,
+      basicReconScore,
+      missionFitScore,
+      targetsFitScore,
+      mobilityFitScore,
+      basicsScore,
+      schoolsScore,
+      targetsCount: listing.targets?.length || 0,
+      mobilitySignals: prefs.mobilitySignals
+    });
+  } else {
+    // Free mode: Pro score = Free score (no personalization)
+    missionFitScore = basicReconScore;
+    
+    console.log('[pro-recap] Free mode scoring', {
+      isProMode,
+      basicReconScore,
+      missionFitScore,
+      hasPlaceTargets: (prefs.placeTargets?.length ?? 0) > 0,
+      hasMobilitySignals: (prefs.mobilitySignals?.length ?? 0) > 0
+    });
+  }
 
-  const pro0to10 =
-    basicsScore * 0.25 +
-    schoolsScore * 0.25 +
-    mobilityScore * 0.15 +
-    envScore * 0.15 +
-    commuteScore * 0.10 +
-    amenitiesScore * 0.10;
-
-  const proRawScore = Math.round(pro0to10 * 10);
-
-  // Alignment factors for mobility/targets
-  const mobilityAlign = prefs.mobilitySignals?.length ? alignFromScore(mobilityScore) : 1.0;
-  const targetAlign = targetScores.length ? alignFromScore(amenitiesScore) : 1.0;
-
-  const mission0to10 =
-    basicsScore * 0.25 +
-    schoolsScore * 0.25 +
-    mobilityScore * 0.15 * mobilityAlign +
-    envScore * 0.15 +
-    commuteScore * 0.10 +
-    amenitiesScore * 0.10 * targetAlign;
-
-  const missionFitScore = Math.round(mission0to10 * 10);
-
-  const scores = { proRawScore, missionFitScore };
+  const scores = { basicReconScore, missionFitScore };
   const recap = await generateAIRecap(listing, prefs, listing.targets || [], scores);
 
   return {
-    proRawScore,
+    basicReconScore,
     missionFitScore,
     recap,
-    targets: (listing.targets || []).map((t, i) => ({ ...t, score: targetScores[i] ?? scoreTarget(t) })),
+    targets: (listing.targets || []).map((t) => ({ ...t, score: scoreTarget(t) })),
     mobilitySignals: prefs.mobilitySignals,
     environment: listing.environment,
+    isProMode,
     debug: {
       basicsScore,
       schoolsScore,
-      mobilityScore,
-      envScore,
-      commuteScore,
-      amenitiesScore,
-      mobilityAlign,
-      targetAlign,
+      mobilityFreeScore,
+      targetsFitScore,
+      mobilityFitScore,
     },
   };
 }
@@ -1124,7 +1592,6 @@ serve(async (req) => {
       hasPrefs: !!prefs.placeTargets?.length,
       envVars: {
         hasHowloudKey: !!HOWLOUD_API_KEY,
-        hasHowloudClientId: !!HOWLOUD_CLIENT_ID,
         hasOpenWeatherKey: !!OPENWEATHER_API_KEY,
         hasMapboxToken: !!MAPBOX_ACCESS_TOKEN,
         hasOpenAIKey: !!OPENAI_API_KEY,
@@ -1161,12 +1628,12 @@ serve(async (req) => {
         const placeTarget = prefs.placeTargets.find(pt => pt.label.toLowerCase() === target.label.toLowerCase());
         if (!placeTarget) return target;
         
-        // Search for places near the property
-        const searchQuery = `${target.label} near ${listing.address || listing.lat + ',' + listing.lon}`;
+        // Search for places near the property using customer's exact query
+        // Use just the target label - Search Box API will use proximity parameter for location biasing
         const places = await findPlacesNearby(
           { lat: listing.lat!, lon: listing.lon! },
-          searchQuery,
-          3 // Find up to 3 places
+          target.label, // Customer's exact search terms (e.g., "preschool", "golf course", "skatepark")
+          3 // Just get top 3 closest POIs
         );
         
         // Set distanceMiles to closest place's distance (or null if no results)
@@ -1181,9 +1648,9 @@ serve(async (req) => {
       listing.targets = await Promise.all(targetPromises);
     }
 
-    // Fetch all environment APIs in parallel - only if we have coordinates (or address for Howloud)
+    // Fetch all environment APIs in parallel - only if we have coordinates
     const [hl, air, lpm] = await Promise.all([
-      listing.address ? fetchHowloud(listing.address) : Promise.resolve(null),
+      listing.lat != null && listing.lon != null ? fetchHowloud(listing.lat, listing.lon) : Promise.resolve(null),
       listing.lat != null && listing.lon != null ? fetchAirQuality(listing.lat, listing.lon) : Promise.resolve(null),
       listing.lat != null && listing.lon != null ? fetchLightPollution(listing.lat, listing.lon) : Promise.resolve(null),
     ]);
@@ -1206,8 +1673,7 @@ serve(async (req) => {
     if (lpm) {
       listing.environment = {
         ...(listing.environment || {}),
-        lightScore: lpm.score,
-        light: lpm.label,
+        sky: lpm.stargazingLabel || 'Unknown',
       } as any;
     }
 
@@ -1224,8 +1690,6 @@ serve(async (req) => {
       result.environment.airLabel = air.label;
     }
     if (lpm) {
-      result.environment.lightScore = lpm.score;
-      result.environment.lightLabel = lpm.label;
       if (lpm.stargazingScore != null) {
         result.environment.stargazingScore = lpm.stargazingScore;
       }
@@ -1245,7 +1709,6 @@ serve(async (req) => {
       },
       envVarsPresent: {
         howloudKey: !!HOWLOUD_API_KEY,
-        howloudClientId: !!HOWLOUD_CLIENT_ID,
         openWeatherKey: !!OPENWEATHER_API_KEY,
         mapboxToken: !!MAPBOX_ACCESS_TOKEN,
         openAIKey: !!OPENAI_API_KEY,

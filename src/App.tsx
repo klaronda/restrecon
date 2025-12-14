@@ -95,49 +95,79 @@ function App() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    const profile = await signInWithProfile(email, password);
-    applyProfile(profile, email);
-    
-    // Refresh profile from database to ensure we have the latest plan status
-    // This is important in case the plan was updated (e.g., upgraded to pro)
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.user) {
-        const freshProfile = await fetchProfile(sessionData.session.user.id);
-        if (freshProfile) {
-          console.log('[App] Refreshed profile after login', { plan: freshProfile.plan });
-          applyProfile(freshProfile, sessionData.session.user.email);
-        }
+      console.log('[App] handleLogin: Starting login for', email);
+      
+      // Sign in and get profile
+      const profile = await signInWithProfile(email, password);
+      if (!profile) {
+        throw new Error('Login failed: No profile returned');
       }
+      
+      console.log('[App] handleLogin: Profile received', { 
+        hasProfile: !!profile,
+        plan: profile?.plan,
+        email: profile?.email 
+      });
+      
+      // Verify session exists
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session) {
+        console.error('[App] handleLogin: No session after sign in', sessionError);
+        throw new Error('Login failed: Session not established');
+      }
+      
+      console.log('[App] handleLogin: Session verified', { 
+        userId: sessionData.session.user.id,
+        email: sessionData.session.user.email 
+      });
+      
+      // Apply profile
+      applyProfile(profile, email);
+      
+      // Refresh profile from database to ensure we have the latest plan status
+      // This is important in case the plan was updated (e.g., upgraded to pro)
+      try {
+        if (sessionData?.session?.user) {
+          const freshProfile = await fetchProfile(sessionData.session.user.id);
+          if (freshProfile) {
+            console.log('[App] handleLogin: Refreshed profile after login', { plan: freshProfile.plan });
+            applyProfile(freshProfile, sessionData.session.user.email);
+          }
+        }
+      } catch (err) {
+        console.warn('[App] handleLogin: Failed to refresh profile after login:', err);
+        // Continue with the profile from signInWithProfile
+      }
+      
+      console.log('[App] handleLogin: Login completed successfully');
     } catch (err) {
-      console.warn('[App] Failed to refresh profile after login:', err);
-      // Continue with the profile from signInWithProfile
+      console.error('[App] handleLogin: Error during login', err);
+      throw err; // Re-throw to let caller handle
     }
   };
 
   const handleLogout = async () => {
+    console.log('[App] handleLogout called');
+    
+    // Always reset state first
+    resetAuthState();
+    console.log('[App] Auth state reset');
+    
+    // Try to sign out (but don't block on errors)
     try {
-      console.log('[App] Starting logout...');
       await signOut();
       console.log('[App] SignOut completed');
     } catch (err) {
-      console.error('[App] Logout failed', err);
-      // Continue with logout even if signOut fails
+      console.error('[App] SignOut error (continuing anyway):', err);
     }
     
-    // Always reset state and redirect, even if signOut had errors
-    resetAuthState();
-    
-    // Clear any stored session data
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-    } catch (err) {
-      console.warn('[App] Additional signOut attempt failed:', err);
-    }
-    
+    // Always redirect, even if signOut failed
     if (typeof window !== 'undefined') {
-      // Use replace to prevent back button from going back to logged-in state
-      window.location.replace('/');
+      console.log('[App] Redirecting to home page...');
+      window.location.href = '/';
+    } else {
+      console.error('[App] window is undefined, cannot redirect');
     }
   };
 
@@ -446,6 +476,11 @@ function App() {
         trial_ends_at: profile.data.trial_ends_at
       });
 
+      // Ensure we have the full profile data before applying
+      if (!profile.data.first_name && !profile.data.last_name) {
+        console.warn('[App] refreshProfile: Profile missing first_name and last_name, but continuing...');
+      }
+      
       applyProfile(profile.data, session.user.email);
       void loadPreferences(); // keep prefs current
       profileLoadedRef.current = true;
@@ -454,7 +489,8 @@ function App() {
       const normalizedPlan = normalizePlan(profile.data.plan);
       console.log('[App] refreshProfile: Normalized plan:', {
         raw: profile.data.plan,
-        normalized: normalizedPlan
+        normalized: normalizedPlan,
+        willShowAs: normalizedPlan === 'active' ? 'pro' : normalizedPlan
       });
       
       return normalizedPlan;
@@ -527,15 +563,18 @@ function App() {
     };
 
     const targetUserId = await ensureUser();
+    console.log('[App] handlePreferencesComplete: Saving preferences for userId:', targetUserId);
 
     let recap: string | null = null;
     try {
       recap = await generateRecap(targetUserId, prefs);
+      console.log('[App] handlePreferencesComplete: Generated recap:', !!recap);
     } catch (err) {
       console.error('Recap failed, saving prefs without recap', err);
     }
     try {
-      await savePreferences(targetUserId, session.user.email ?? null, prefs, recap ?? undefined);
+      const result = await savePreferences(targetUserId, session.user.email ?? null, prefs, recap ?? undefined);
+      console.log('[App] handlePreferencesComplete: Preferences saved successfully:', !!result);
       setPreferences({ ...prefs, recapText: recap ?? prefs.recapText });
     } catch (err) {
       console.error('Save preferences failed', err);
@@ -557,8 +596,19 @@ function App() {
       
       const refresh = async () => {
         try {
+          // Force refresh by resetting the loading flag
+          profileLoadingRef.current = false;
           const status = await refreshProfile();
           console.log('[App] AccountRoute: Profile refreshed, status:', status);
+          
+          // If still showing wrong data, try one more time after a short delay
+          if (userName === 'klaronda' || subscriptionStatus === 'none') {
+            console.log('[App] AccountRoute: Data still incorrect, retrying after delay...');
+            setTimeout(async () => {
+              profileLoadingRef.current = false;
+              await refreshProfile();
+            }, 1000);
+          }
         } catch (err) {
           console.error('[App] AccountRoute: Error refreshing profile:', err);
         }

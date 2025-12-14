@@ -149,7 +149,7 @@ export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps
       {/* Content */}
       <main className="max-w-4xl mx-auto px-6 py-16">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">Privacy Policy</h1>
-        <p className="text-gray-600 mb-8">Last updated: January 15, 2025</p>
+        <p className="text-gray-600 mb-8">Last updated: December 13, 2025</p>
 
         <div className="prose prose-lg max-w-none">
           <section className="mb-12">
@@ -170,10 +170,13 @@ export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps
               When you use our Chrome extension, we collect:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2 mb-4">
-              <li>Property listing data that you view on Zillow or Redfin (only when you actively use the extension)</li>
-              <li>Your home search preferences and criteria</li>
-              <li>Extension usage data to improve functionality</li>
+              <li>Property listing data that you view on Zillow or Redfin only when you actively use the extension</li>
+              <li>Your home search preferences, targets, and criteria (such as place types you care about and mobility signals you select)</li>
+              <li>Extension usage data to improve functionality and reliability</li>
             </ul>
+            <p className="text-gray-700 leading-relaxed mb-4">
+              We do not collect data from pages unless the NestRecon extension is actively enabled and used by you.
+            </p>
 
             <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Account Information</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
@@ -183,92 +186,107 @@ export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps
               <li>Email address</li>
               <li>Name (first and last)</li>
               <li>Password (encrypted and stored securely)</li>
-              <li>Subscription and payment information (processed through Stripe)</li>
+              <li>Subscription and payment status (processed through Stripe)</li>
             </ul>
+            <p className="text-gray-700 leading-relaxed mb-4">
+              We do not store full payment card details on our servers.
+            </p>
 
             <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Usage Data</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We automatically collect information about how you use our Service, including:
+              We automatically collect limited information about how you use our Service, including:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li>Pages visited and features used</li>
-              <li>Time spent on the Service</li>
-              <li>Device and browser information</li>
-              <li>IP address and general location data</li>
+              <li>Pages visited and features used within NestRecon</li>
+              <li>Time spent using the Service</li>
+              <li>Device and browser type</li>
+              <li>IP address and coarse location information (such as city or region inferred from IP)</li>
             </ul>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">How We Use Information</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We use the collected information for:
+              We use the information we collect to:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li>Providing and maintaining our Service</li>
-              <li>Processing your subscription and payments</li>
-              <li>Personalizing your home search experience</li>
-              <li>Sending you service-related communications</li>
-              <li>Improving and optimizing our Service</li>
-              <li>Detecting and preventing fraud or abuse</li>
-              <li>Complying with legal obligations</li>
+              <li>Provide and maintain the Service</li>
+              <li>Process subscriptions and payments</li>
+              <li>Personalize scoring and insights based on your preferences</li>
+              <li>Send service-related communications</li>
+              <li>Improve and optimize product performance</li>
+              <li>Detect and prevent fraud or abuse</li>
+              <li>Comply with legal obligations</li>
             </ul>
+            <p className="text-gray-700 leading-relaxed mt-4">
+              We do not sell your personal information or use it for advertising profiling.
+            </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Third-Party Services</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We use the following third-party services that may collect or process your data:
+              NestRecon uses trusted third-party services to operate and enhance the Service. These providers may process limited data as necessary to perform their functions.
             </p>
             
             <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Supabase</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We use Supabase for user authentication, database storage, and hosting. Your account data and preferences are stored securely on Supabase's infrastructure.
+              We use Supabase for user authentication, database storage, and backend services. Account data and user preferences are stored securely on Supabase infrastructure.
             </p>
 
             <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Stripe</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              Payment processing is handled by Stripe. We do not store your full payment card details. Stripe processes and stores payment information according to their privacy policy.
+              Payment processing is handled by Stripe. Stripe collects and processes payment information according to its own privacy policy. NestRecon does not store your full payment card details.
             </p>
 
-            <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Google Maps API</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Mapbox</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We use Google Maps API for location services, geocoding, and distance calculations. Google may collect usage data according to their privacy policy.
+              We use Mapbox APIs for location-based services such as geocoding, proximity analysis, and place lookup. To provide these features, limited location-related data (such as coordinates derived from a property listing) may be sent to Mapbox.
+            </p>
+            <p className="text-gray-700 leading-relaxed mb-4">
+              Mapbox processes this data according to its own privacy policy and does not sell personal data collected through our use of its services.
+            </p>
+            <p className="text-gray-700 leading-relaxed mb-4">
+              Mapbox Privacy Policy: <a href="https://www.mapbox.com/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-[#556B2F] hover:underline">https://www.mapbox.com/legal/privacy</a>
             </p>
 
-            <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Howloud, OpenWeather, LightPollutionMap</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">Environmental Data Providers</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We integrate with these services to provide environmental data (sound scores, air quality, light pollution). These services may receive location data to provide relevant information.
+              We integrate with third-party services such as Howloud, OpenWeather, and LightPollutionMap to provide environmental indicators including sound levels, air quality, and night-sky conditions.
+            </p>
+            <p className="text-gray-700 leading-relaxed">
+              These services may receive approximate location data related to a property to return relevant information. We do not send personal identifying information to these providers.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Data Storage and Security</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We implement appropriate technical and organizational measures to protect your personal information:
+              We implement appropriate technical and organizational safeguards to protect your personal information, including:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li>Data encryption in transit and at rest</li>
+              <li>Encryption in transit and at rest</li>
               <li>Secure authentication and access controls</li>
               <li>Regular security assessments</li>
-              <li>Limited access to personal data on a need-to-know basis</li>
+              <li>Restricted access to personal data on a need-to-know basis</li>
             </ul>
             <p className="text-gray-700 leading-relaxed mt-4">
-              However, no method of transmission over the Internet or electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your data, we cannot guarantee absolute security.
+              However, no method of transmission over the Internet or electronic storage is completely secure, and we cannot guarantee absolute security.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Chrome Extension Permissions</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              Our Chrome extension requires the following permissions:
+              The NestRecon Chrome extension requires the following permissions:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li><strong>Active Tab Access:</strong> To read property listing data from Zillow and Redfin pages you visit</li>
-              <li><strong>Storage:</strong> To save your preferences and session data locally</li>
-              <li><strong>Host Permissions:</strong> To communicate with our servers and third-party APIs</li>
+              <li><strong>Active Tab Access</strong> – to read property listing data from Zillow or Redfin pages you actively visit</li>
+              <li><strong>Storage</strong> – to save preferences and session data locally</li>
+              <li><strong>Host Permissions</strong> – to communicate with our servers and approved third-party APIs</li>
             </ul>
             <p className="text-gray-700 leading-relaxed mt-4">
-              We only access data from pages you actively visit while using the extension. We do not track your browsing history or access other websites.
+              We do not track your browsing history or access data from other websites.
             </p>
           </section>
 
@@ -278,54 +296,54 @@ export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps
               You have the right to:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li><strong>Access:</strong> Request a copy of your personal data</li>
-              <li><strong>Correction:</strong> Update or correct inaccurate information</li>
-              <li><strong>Deletion:</strong> Request deletion of your account and data</li>
-              <li><strong>Opt-out:</strong> Unsubscribe from marketing communications</li>
-              <li><strong>Data Portability:</strong> Request your data in a portable format</li>
+              <li><strong>Access</strong> – request a copy of your personal data</li>
+              <li><strong>Correction</strong> – update or correct inaccurate information</li>
+              <li><strong>Deletion</strong> – request deletion of your account and associated data</li>
+              <li><strong>Opt-out</strong> – unsubscribe from non-essential communications</li>
+              <li><strong>Data Portability</strong> – request your data in a portable format</li>
             </ul>
             <p className="text-gray-700 leading-relaxed mt-4">
-              To exercise these rights, contact us at the email address provided below.
+              To exercise these rights, contact us using the information below.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Cookies and Tracking</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              We use cookies and similar tracking technologies to:
+              We use cookies and similar technologies to:
             </p>
             <ul className="list-disc pl-6 text-gray-700 space-y-2">
-              <li>Maintain your session and authentication state</li>
-              <li>Remember your preferences</li>
+              <li>Maintain authentication and session state</li>
+              <li>Remember user preferences</li>
               <li>Analyze Service usage and performance</li>
             </ul>
             <p className="text-gray-700 leading-relaxed mt-4">
-              You can control cookies through your browser settings. However, disabling cookies may limit your ability to use certain features of our Service.
+              You can control cookies through your browser settings. Disabling cookies may limit certain features.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Children's Privacy</h2>
             <p className="text-gray-700 leading-relaxed">
-              Our Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
+              NestRecon is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us immediately.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Changes to This Privacy Policy</h2>
             <p className="text-gray-700 leading-relaxed">
-              We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date. You are advised to review this Privacy Policy periodically for any changes.
+              We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated "Last updated" date. We encourage you to review this policy periodically.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Contact Us</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              If you have any questions about this Privacy Policy, please contact us:
+              If you have questions or concerns about this Privacy Policy or your data, please contact us:
             </p>
             <p className="text-gray-700 leading-relaxed">
               Email: privacy@nestrecon.com<br />
-              Website: <Link to="/" className="text-[#556B2F] hover:underline">nestrecon.com</Link>
+              Website: <Link to="/" className="text-[#556B2F] hover:underline">https://www.nestrecon.com</Link>
             </p>
           </section>
         </div>

@@ -114,8 +114,18 @@ export async function fetchProfile(userId: string): Promise<AuthProfile | null> 
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut({ scope: 'global' });
-  if (error) throw error;
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    if (error) {
+      console.error('[auth] signOut error:', error);
+      // Don't throw - let the caller handle redirect
+    } else {
+      console.log('[auth] signOut successful');
+    }
+  } catch (err) {
+    console.error('[auth] signOut exception:', err);
+    // Don't throw - let the caller handle redirect
+  }
 }
 
 
