@@ -789,14 +789,25 @@ function App() {
   useEffect(() => {
     let isMounted = true;
     let authSub: { unsubscribe: () => void } | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
 
-      const initSession = async () => {
+    const initSession = async () => {
       try {
         console.log('[App] Initializing session...');
+        
+        // Set a timeout to ensure authReady is set even if something hangs
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('[App] Auth initialization timeout - setting authReady to true anyway');
+            setAuthReady(true);
+          }
+        }, 5000); // 5 second timeout
+        
         const { data, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error('[App] Error getting session:', sessionError);
+          if (timeoutId) clearTimeout(timeoutId);
           setAuthReady(true); // Still set ready so app can render
           return;
         }
@@ -807,27 +818,37 @@ function App() {
         if (session?.user && isMounted) {
           try {
             console.log('[App] Fetching profile for user:', session.user.id);
-            const profile = await supabase
+            // Add timeout to profile fetch
+            const profilePromise = supabase
               .from('users')
               .select('first_name, last_name, email, plan, trial_ends_at')
               .eq('auth_user_id', session.user.id)
               .maybeSingle();
             
-            if (profile.error) {
+            const profileTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+            );
+            
+            const profile = await Promise.race([profilePromise, profileTimeout]) as any;
+            
+            if (profile?.error) {
               console.error('[App] Profile fetch error on init:', profile.error);
             } else {
               console.log('[App] Profile fetched from database:', {
-                data: profile.data,
-                hasData: !!profile.data,
-                plan: profile.data?.plan,
-                firstName: profile.data?.first_name,
-                lastName: profile.data?.last_name,
-                email: profile.data?.email
+                data: profile?.data,
+                hasData: !!profile?.data,
+                plan: profile?.data?.plan,
+                firstName: profile?.data?.first_name,
+                lastName: profile?.data?.last_name,
+                email: profile?.data?.email
               });
-              applyProfile(profile.data, session.user.email);
+              if (profile?.data) {
+                applyProfile(profile.data, session.user.email);
+              }
             }
           } catch (profileErr) {
             console.error('[App] Error fetching profile on init:', profileErr);
+            // Continue anyway - don't block the app
           }
         } else if (!session && isMounted) {
           console.log('[App] No initial session found');
@@ -856,7 +877,9 @@ function App() {
                   lastName: profile.data?.last_name,
                   email: profile.data?.email
                 });
-                applyProfile(profile.data, session.user.email);
+                if (profile.data) {
+                  applyProfile(profile.data, session.user.email);
+                }
               }
             } catch (profileErr) {
               console.error('[App] Error in auth state change handler:', profileErr);
@@ -867,10 +890,13 @@ function App() {
           }
         });
         authSub = listener.subscription;
+        
+        if (timeoutId) clearTimeout(timeoutId);
         setAuthReady(true);
         console.log('[App] Auth initialization complete, authReady set to true');
       } catch (err) {
         console.error('[App] Error in initSession:', err);
+        if (timeoutId) clearTimeout(timeoutId);
         setAuthReady(true); // Still set ready so app can render
       }
     };
@@ -879,6 +905,7 @@ function App() {
 
     return () => {
       isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
       if (authSub) authSub.unsubscribe();
     };
   }, []);
