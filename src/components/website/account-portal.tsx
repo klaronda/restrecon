@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock } from 'lucide-react';
 import { UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
+import { EditProfileModal } from './edit-profile-modal';
+import { supabase } from '../../lib/supabaseClient';
+import { fetchProfile } from '../../services/auth';
 
 interface AccountPortalProps {
   userName: string;
@@ -14,6 +17,7 @@ interface AccountPortalProps {
   onRefreshStatus?: () => void;
   preferences?: UserPreferences | null;
   onStartPreferences?: () => void;
+  onProfileUpdated?: () => void;
 }
 
 export function AccountPortal({
@@ -26,27 +30,43 @@ export function AccountPortal({
   onRefreshStatus,
   preferences,
   onStartPreferences,
+  onProfileUpdated,
 }: AccountPortalProps) {
-  console.log('[AccountPortal] Component rendering with props:', {
-    userName,
-    userEmail,
-    subscriptionStatus,
-    trialDaysRemaining,
-    hasOnLogout: !!onLogout,
-    hasOnManageBilling: !!onManageBilling
-  });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [profileFirstName, setProfileFirstName] = useState<string | null>(null);
+  const [profileLastName, setProfileLastName] = useState<string | null>(null);
   
   const isTrialActive = subscriptionStatus === 'trial';
   const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
-  
-  // Debug logging for pro status
-  console.log('[AccountPortal] Subscription status check:', {
-    subscriptionStatus,
-    isPro,
-    isTrialActive,
-    isFree
-  });
+
+  // Fetch profile data when modal opens
+  useEffect(() => {
+    if (isEditModalOpen) {
+      const loadProfile = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const profile = await fetchProfile(user.id);
+            if (profile) {
+              setProfileFirstName(profile.first_name || null);
+              setProfileLastName(profile.last_name || null);
+            }
+          }
+        } catch (err) {
+          if (import.meta.env.DEV) console.error('[AccountPortal] Error loading profile:', err);
+        }
+      };
+      void loadProfile();
+    }
+  }, [isEditModalOpen]);
+
+  const handleProfileUpdated = () => {
+    if (onProfileUpdated) {
+      onProfileUpdated();
+    }
+    setIsEditModalOpen(false);
+  };
 
   const [deviceInfo, setDeviceInfo] = useState<{
     browser: string;
@@ -143,7 +163,10 @@ export function AccountPortal({
                 <label className="text-sm text-gray-500">Email</label>
                 <p className="text-gray-900">{userEmail || 'No email on file'}</p>
               </div>
-              <button className="text-sm text-[#556B2F] hover:underline flex items-center gap-1">
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="text-sm text-[#556B2F] hover:underline flex items-center gap-1"
+              >
                 Edit Profile
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -363,6 +386,16 @@ export function AccountPortal({
           </div>
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        currentFirstName={profileFirstName}
+        currentLastName={profileLastName}
+        currentEmail={userEmail}
+        onProfileUpdated={handleProfileUpdated}
+      />
     </div>
   );
 }

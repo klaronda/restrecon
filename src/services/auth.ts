@@ -242,6 +242,54 @@ export async function fetchProfile(userId: string): Promise<AuthProfile | null> 
   return data;
 }
 
+export async function updateProfile(firstName: string | null, lastName: string | null): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update({
+      first_name: firstName || null,
+      last_name: lastName || null,
+    })
+    .eq('auth_user_id', user.id);
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error('[auth] updateProfile error:', error.message);
+    }
+    throw new Error('Failed to update profile. Please try again.');
+  }
+}
+
+export async function updatePassword(newPassword: string): Promise<void> {
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters long.');
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error('[auth] updatePassword error:', error.message);
+    }
+    
+    // Provide user-friendly error messages
+    if (error.message.includes('same') || error.message.includes('identical')) {
+      throw new Error('New password must be different from your current password.');
+    }
+    if (error.message.includes('weak') || error.message.includes('too short')) {
+      throw new Error('Password is too weak. Please use a stronger password.');
+    }
+    
+    throw new Error('Failed to update password. Please try again.');
+  }
+}
+
 export async function signOut() {
   try {
     await supabase.auth.signOut({ scope: 'global' });

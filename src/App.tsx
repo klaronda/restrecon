@@ -329,6 +329,9 @@ function App() {
         }}
         preferences={preferences}
         onStartPreferences={() => setShowPrefsWizard(true)}
+        onProfileUpdated={async () => {
+          await refreshProfile();
+        }}
       />
     );
   };
