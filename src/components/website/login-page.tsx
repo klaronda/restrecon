@@ -265,15 +265,41 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             urlLength: finalUrl.length,
             hasAccessToken: hashParams.has('access_token'),
             hasRefreshToken: hashParams.has('refresh_token'),
-            hasState: hashParams.has('state')
+            hasState: hashParams.has('state'),
+            isChromeExtensionUrl: finalUrl.startsWith('chrome-extension://')
           });
+
+          // For Chrome extension URLs, try opening in a new window/tab first
+          // If that fails, fall back to direct location change
+          if (finalUrl.startsWith('chrome-extension://')) {
+            console.log('[login-page] Attempting Chrome extension redirect');
+
+            try {
+              // Try opening in new window (this might work better for extensions)
+              const newWindow = window.open(finalUrl, '_blank');
+              if (newWindow) {
+                console.log('[login-page] Opened extension callback in new window');
+                // Don't close current window - let user close the callback window manually
+                setIsLoading(false);
+                setSuccess('Authentication successful! Please close this window and return to your extension.');
+                return;
+              } else {
+                console.warn('[login-page] window.open failed, trying direct redirect');
+              }
+            } catch (windowErr) {
+              console.warn('[login-page] window.open error:', windowErr);
+            }
+          }
+
+          // Fallback: direct location change
+          console.log('[login-page] Using direct location redirect');
 
           // Add a fallback timeout in case redirect fails
           const redirectTimeout = setTimeout(() => {
             console.error('[login-page] Redirect timeout - redirect may have failed');
             setError('Redirect to extension failed. Please try refreshing the extension popup.');
             setIsLoading(false);
-          }, 3000);
+          }, 5000); // Increased timeout for extension redirects
 
           // Attempt redirect
           window.location.href = finalUrl;
