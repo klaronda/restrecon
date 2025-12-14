@@ -7,16 +7,21 @@ interface PrivacyPolicyPageProps {
 
 export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps) {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
       {/* Navigation */}
       <SharedNav isLoggedIn={isLoggedIn} />
 
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-6 py-16">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">Privacy Policy</h1>
-        <p className="text-gray-600 mb-8">Last updated: December 13, 2025</p>
+      {/* Header */}
+      <div className="bg-gradient-to-br from-[#556B2F] to-[#4a5e28] py-16">
+        <div className="max-w-4xl mx-auto px-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Privacy Policy</h1>
+          <p className="text-white/90">Last updated: December 13, 2025</p>
+        </div>
+      </div>
 
-        <div className="prose prose-lg max-w-none">
+      {/* Content */}
+      <main className="max-w-4xl mx-auto px-6 py-12">
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 p-8 md:p-12">
           <section className="mb-12">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Introduction</h2>
             <p className="text-gray-700 leading-relaxed mb-4">

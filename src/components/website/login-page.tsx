@@ -29,15 +29,31 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     
     const checkExistingSession = async () => {
       try {
-        // Add timeout fallback to prevent infinite loading
+        // Add shorter timeout fallback to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('[login-page] Session check timeout, showing login form');
+            console.warn('[login-page] Session check timeout (2s), showing login form');
             setCheckingSession(false);
           }
-        }, 3000);
+        }, 2000); // Reduced from 3s to 2s
         
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Race the session check with the timeout
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 2000)
+        );
+        
+        let sessionResult;
+        try {
+          sessionResult = await Promise.race([sessionPromise, timeoutPromise]);
+        } catch (raceErr) {
+          // Timeout won the race
+          if (isMounted) {
+            console.warn('[login-page] Session check timed out, showing login form');
+            setCheckingSession(false);
+          }
+          return;
+        }
         
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -45,6 +61,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         }
         
         if (!isMounted) return;
+        
+        const { data: { session }, error: sessionError } = sessionResult as any;
         
         if (session && !sessionError) {
           // User is already logged in
@@ -96,7 +114,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
-        setCheckingSession(false);
+        if (isMounted) {
+          setCheckingSession(false);
+        }
       }
     };
     

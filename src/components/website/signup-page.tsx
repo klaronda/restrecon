@@ -13,8 +13,10 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-   const [error, setError] = useState<string | null>(null);
-   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -23,7 +25,8 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
       setError(null);
       setIsLoading(true);
       await onSignUp({ firstName, lastName, email, password });
-      navigate('/account');
+      setUserEmail(email);
+      setIsSuccess(true);
     } catch (err: any) {
       // Error messages are now user-friendly from auth.ts
       const errorMessage = err?.message || 'Sign up failed. Please try again.';
@@ -56,12 +59,42 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
           <div className="absolute -top-6 -right-6">
           </div>
 
-          <h1 className="text-gray-900 mb-2">Create Account</h1>
-          <p className="text-gray-600 text-sm mb-8">
-            Your preferences will guide every mission.
-          </p>
+          {isSuccess ? (
+            /* Success Message */
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h1 className="text-gray-900 mb-3 text-2xl font-bold">Thanks for Enlisting in NestRecon!</h1>
+              <p className="text-gray-700 mb-2">
+                We sent you a verification email to <strong>{userEmail}</strong>
+              </p>
+              <p className="text-gray-600 text-sm mb-6">
+                Please check your inbox and click the confirmation link to activate your account and start your 7-day free trial.
+              </p>
+              <div className="bg-[#F3A712]/10 border border-[#F3A712]/30 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-700">
+                  <strong>Didn't receive the email?</strong><br />
+                  Check your spam folder or <Link to="/signup" onClick={() => setIsSuccess(false)} className="text-[#556B2F] hover:underline">try signing up again</Link>
+                </p>
+              </div>
+              <Link
+                to="/login"
+                className="inline-block bg-[#556B2F] text-white px-6 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors"
+              >
+                Go to Login
+              </Link>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-gray-900 mb-2">Create Account</h1>
+              <p className="text-gray-600 text-sm mb-8">
+                Your preferences will guide every mission.
+              </p>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5">
             {/* First Name */}
             <div>
               <label htmlFor="firstName" className="block text-sm text-gray-700 mb-2">
@@ -156,20 +189,22 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
             >
               {isLoading ? 'Creating account...' : 'Create Account'}
             </button>
-            {error && (
-              <p className="text-sm text-red-600 text-center">{error}</p>
-            )}
-          </form>
+                {error && (
+                  <p className="text-sm text-red-600 text-center">{error}</p>
+                )}
+              </form>
 
-          {/* Login Link */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link to="/login" className="text-[#556B2F] hover:underline">
-                Log in
-              </Link>
-            </p>
-          </div>
+              {/* Login Link */}
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600">
+                  Already have an account?{' '}
+                  <Link to="/login" className="text-[#556B2F] hover:underline">
+                    Log in
+                  </Link>
+                </p>
+              </div>
+            </>
+          )}
 
           {/* Tactical Brackets */}
           <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-[#556B2F]/20" />
