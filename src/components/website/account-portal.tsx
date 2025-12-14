@@ -1,12 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock } from 'lucide-react';
 import { UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
-import { EditProfileModal } from './edit-profile-modal';
-import { EditPreferencesModal } from './edit-preferences-modal';
-import { supabase } from '../../lib/supabaseClient';
-import { fetchProfile } from '../../services/auth';
 
 interface AccountPortalProps {
   userName: string;
@@ -35,42 +31,9 @@ export function AccountPortal({
   onProfileUpdated,
   onPreferencesComplete,
 }: AccountPortalProps) {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
-  const [profileFirstName, setProfileFirstName] = useState<string | null>(null);
-  const [profileLastName, setProfileLastName] = useState<string | null>(null);
-  
   const isTrialActive = subscriptionStatus === 'trial';
   const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
-
-  // Fetch profile data when modal opens
-  useEffect(() => {
-    if (isEditModalOpen) {
-      const loadProfile = async () => {
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const profile = await fetchProfile(user.id);
-            if (profile) {
-              setProfileFirstName(profile.first_name || null);
-              setProfileLastName(profile.last_name || null);
-            }
-          }
-        } catch (err) {
-          if (import.meta.env.DEV) console.error('[AccountPortal] Error loading profile:', err);
-        }
-      };
-      void loadProfile();
-    }
-  }, [isEditModalOpen]);
-
-  const handleProfileUpdated = () => {
-    if (onProfileUpdated) {
-      onProfileUpdated();
-    }
-    setIsEditModalOpen(false);
-  };
 
   const [deviceInfo, setDeviceInfo] = useState<{
     browser: string;
@@ -167,13 +130,13 @@ export function AccountPortal({
                 <label className="text-sm text-gray-500">Email</label>
                 <p className="text-gray-900">{userEmail || 'No email on file'}</p>
               </div>
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
+              <Link 
+                to="/edit-profile"
                 className="text-sm text-[#556B2F] hover:underline flex items-center gap-1"
               >
                 Edit Profile
                 <ChevronRight className="w-4 h-4" />
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -298,24 +261,24 @@ export function AccountPortal({
                     Transit: {preferences.toggles?.transitScore ? 'On' : 'Off'}
                   </span>
                 </div>
-                <button
-                  onClick={() => setIsPreferencesModalOpen(true)}
+                <Link
+                  to="/edit-preferences"
                   className="inline-flex items-center gap-2 text-[#556B2F] hover:underline text-sm"
                 >
                   Edit preferences
                   <ChevronRight className="w-4 h-4" />
-                </button>
+                </Link>
             </div>
             ) : (
               <div className="bg-[#556B2F]/5 border border-[#556B2F]/20 rounded-lg p-4">
                 <p className="text-gray-800 mb-2">Set up your preferences to get the best intel for your search.</p>
-                <button
-                  onClick={() => setIsPreferencesModalOpen(true)}
+                <Link
+                  to="/edit-preferences"
                   className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
                 >
                   Calibrate preferences
                   <ChevronRight className="w-4 h-4" />
-                </button>
+                </Link>
               </div>
             )}
           </div>
@@ -386,30 +349,6 @@ export function AccountPortal({
           </div>
         )}
       </div>
-
-      {/* Edit Profile Modal */}
-      <EditProfileModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        currentFirstName={profileFirstName}
-        currentLastName={profileLastName}
-        currentEmail={userEmail}
-        onProfileUpdated={handleProfileUpdated}
-      />
-
-      {/* Edit Preferences Modal */}
-      <EditPreferencesModal
-        isOpen={isPreferencesModalOpen}
-        onClose={() => setIsPreferencesModalOpen(false)}
-        userName={userName}
-        initialPreferences={preferences}
-        onComplete={(prefs) => {
-          if (onPreferencesComplete) {
-            onPreferencesComplete(prefs);
-          }
-          setIsPreferencesModalOpen(false);
-        }}
-      />
     </div>
   );
 }

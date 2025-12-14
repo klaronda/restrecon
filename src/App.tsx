@@ -17,6 +17,8 @@ import { AuthProfile, signInWithProfile, signOut, signUpWithProfile, fetchProfil
 import { openCustomerPortal } from './services/payments';
 import { fetchPreferences, savePreferences, generateRecap, UserPreferences } from './services/preferences';
 import { OnboardingChat } from './components/onboarding-chat';
+import { EditProfilePage } from './components/website/edit-profile-page';
+import { EditPreferencesPage } from './components/website/edit-preferences-page';
 
 type SubscriptionStatus = 'none' | 'trial' | 'trial_expired' | 'active' | 'cancelled';
 
@@ -621,6 +623,30 @@ function App() {
         <Route 
           path="/terms" 
           element={<TermsOfServicePage isLoggedIn={isLoggedIn} />} 
+        />
+        <Route 
+          path="/edit-profile" 
+          element={
+            isLoggedIn ? (
+              <EditProfilePage />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route 
+          path="/edit-preferences" 
+          element={
+            isLoggedIn ? (
+              <EditPreferencesPage 
+                userName={userName || 'User'}
+                initialPreferences={preferences}
+                onComplete={handlePreferencesComplete}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
         />
 
         {/* Fallback */}
