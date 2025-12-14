@@ -14,8 +14,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{ code?: string; status?: string; original?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  
+  const isDevMode = import.meta.env.DEV;
 
   // Check if this is an extension login
   const isExtension = searchParams.get('extension') === 'true';
@@ -133,6 +136,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorDetails(null);
     if (!email || !password) return;
     try {
       setIsLoading(true);
@@ -145,21 +149,38 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         });
         
         if (signInError) {
-          // Use friendly error messages
+          // Log detailed error for extension login
+          console.error('[login-page] Extension login error:', {
+            errorMessage: signInError.message,
+            errorCode: signInError.code,
+            errorStatus: signInError.status,
+            fullError: isDevMode ? signInError : undefined
+          });
+          
+          // Use the same error message mapping as normal login
+          const errorCode = signInError.code || '';
           const errorMessage = signInError.message || '';
+          
           let friendlyMessage = 'Login failed. Please check your credentials and try again.';
           
-          if (errorMessage.includes('Invalid login credentials') || (errorMessage.includes('invalid') && errorMessage.includes('password'))) {
+          if (errorCode === 'invalid_credentials' || errorCode === 'invalid_grant' ||
+              errorMessage.toLowerCase().includes('invalid login credentials') ||
+              (errorMessage.toLowerCase().includes('invalid') && errorMessage.toLowerCase().includes('password'))) {
             friendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
-          } else if (errorMessage.includes('Email not confirmed') || errorMessage.includes('email not confirmed')) {
+          } else if (errorCode === 'email_not_confirmed' || errorMessage.includes('Email not confirmed') || errorMessage.includes('email not confirmed')) {
             friendlyMessage = 'Please verify your email address before logging in.';
-          } else if (errorMessage.includes('Too many requests') || errorMessage.includes('rate limit')) {
+          } else if (errorCode === 'too_many_requests' || errorMessage.includes('Too many requests') || errorMessage.includes('rate limit')) {
             friendlyMessage = 'Too many login attempts. Please wait a moment and try again.';
-          } else if (errorMessage.includes('User not found')) {
+          } else if (errorCode === 'user_not_found' || errorMessage.includes('User not found')) {
             friendlyMessage = 'No account found with this email address. Please sign up instead.';
           }
           
-          setError(friendlyMessage);
+          setError(isDevMode ? `[DEV] ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}` : friendlyMessage);
+          setErrorDetails({
+            code: errorCode,
+            status: signInError.status,
+            original: isDevMode ? signInError : undefined
+          });
           setIsLoading(false);
           return;
         }
@@ -232,7 +253,23 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       // Error messages are now user-friendly from auth.ts
       const errorMessage = err?.message || 'Login failed. Please check your credentials and try again.';
       setError(errorMessage);
-      console.error('[login-page] Login error:', err);
+      
+      // Store error details for debugging
+      setErrorDetails({
+        code: err?.errorCode || err?.code,
+        status: err?.status || err?.errorStatus,
+        original: isDevMode ? err?.originalError : undefined
+      });
+      
+      // Log full error details for debugging
+      console.error('[login-page] Login error:', {
+        message: errorMessage,
+        errorCode: err?.errorCode || err?.code,
+        errorStatus: err?.status || err?.errorStatus,
+        errorType: err?.errorType,
+        originalError: err?.originalError,
+        fullError: err
+      });
     } finally {
       setIsLoading(false);
     }
@@ -338,7 +375,24 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {isLoading ? 'Signing in...' : 'Enter Mission Control'}
             </button>
             {error && (
-              <p className="text-sm text-red-600 text-center">{error}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-red-600 text-center">{error}</p>
+                {isDevMode && errorDetails && (
+                  <div className="text-xs text-gray-500 text-center space-y-1 p-2 bg-gray-50 rounded border border-gray-200">
+                    <p><strong>Debug Info:</strong></p>
+                    {errorDetails.code && <p>Error Code: {errorDetails.code}</p>}
+                    {errorDetails.status && <p>Status: {errorDetails.status}</p>}
+                    {errorDetails.original && (
+                      <details className="mt-2 text-left">
+                        <summary className="cursor-pointer text-gray-600 hover:text-gray-800">Show original error</summary>
+                        <pre className="mt-1 text-xs overflow-auto max-h-32 p-2 bg-gray-100 rounded">
+                          {JSON.stringify(errorDetails.original, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </form>
 

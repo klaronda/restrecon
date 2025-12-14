@@ -150,25 +150,47 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
 }
 
 // Helper function to get user-friendly login error messages
-function getSignInErrorMessage(error: any): string {
+function getSignInErrorMessage(error: any, isDevMode: boolean = false): string {
   const errorMessage = error?.message || '';
   const errorCode = error?.code || '';
+  const errorStatus = error?.status || '';
   
-  // Check for specific Supabase error codes
-  if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('invalid') && errorMessage.includes('password')) {
+  // In development mode, show actual error for debugging
+  if (isDevMode && errorMessage) {
+    return `[DEV] ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}${errorStatus ? ` (Status: ${errorStatus})` : ''}`;
+  }
+  
+  // Check for exact Supabase error codes
+  if (errorCode === 'invalid_credentials' || errorCode === 'invalid_grant') {
     return 'Invalid email or password. Please check your credentials and try again.';
   }
   
-  if (errorMessage.includes('Email not confirmed') || errorMessage.includes('email not confirmed')) {
+  if (errorCode === 'email_not_confirmed' || errorMessage.includes('Email not confirmed') || errorMessage.includes('email not confirmed')) {
     return 'Please verify your email address before logging in.';
   }
   
-  if (errorMessage.includes('Too many requests') || errorMessage.includes('rate limit')) {
+  if (errorCode === 'too_many_requests' || errorMessage.includes('Too many requests') || errorMessage.includes('rate limit')) {
     return 'Too many login attempts. Please wait a moment and try again.';
   }
   
-  if (errorMessage.includes('User not found')) {
+  if (errorCode === 'user_not_found' || errorMessage.includes('User not found')) {
     return 'No account found with this email address. Please sign up instead.';
+  }
+  
+  // Check for RLS policy errors
+  if (errorMessage.includes('row-level security') || errorMessage.includes('RLS') || errorMessage.includes('policy')) {
+    return 'Access denied. Please contact support if this issue persists.';
+  }
+  
+  // Check for database connection errors
+  if (errorMessage.includes('network') || errorMessage.includes('connection') || errorMessage.includes('timeout')) {
+    return 'Connection error. Please check your internet connection and try again.';
+  }
+  
+  // Check for invalid credentials (case-insensitive)
+  if (errorMessage.toLowerCase().includes('invalid login credentials') || 
+      (errorMessage.toLowerCase().includes('invalid') && errorMessage.toLowerCase().includes('password'))) {
+    return 'Invalid email or password. Please check your credentials and try again.';
   }
   
   // Default error message
@@ -176,23 +198,108 @@ function getSignInErrorMessage(error: any): string {
 }
 
 export async function signInWithProfile(email: string, password: string): Promise<AuthProfile | null> {
+  const isDevMode = import.meta.env.DEV;
+  const maskedEmail = email ? `${email.substring(0, 3)}***@${email.split('@')[1]}` : 'unknown';
+  
+  console.log('[auth] signInWithProfile: Starting login attempt', {
+    email: maskedEmail,
+    hasPassword: !!password,
+    passwordLength: password.length
+  });
+  
+  // Step 1: Authenticate with Supabase
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
   
   if (error) {
-    const friendlyMessage = getSignInErrorMessage(error);
+    // Log detailed error information
+    console.error('[auth] signInWithProfile: Authentication failed', {
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorStatus: error.status,
+      email: maskedEmail,
+      fullError: isDevMode ? error : undefined
+    });
+    
+    const friendlyMessage = getSignInErrorMessage(error, isDevMode);
     const enhancedError = new Error(friendlyMessage);
     (enhancedError as any).originalError = error;
+    (enhancedError as any).errorCode = error.code;
+    (enhancedError as any).errorStatus = error.status;
     throw enhancedError;
   }
 
   const user = data.user;
-  if (!user) return null;
+  if (!user) {
+    console.error('[auth] signInWithProfile: Auth succeeded but no user returned', {
+      hasData: !!data,
+      hasSession: !!data.session,
+      email: maskedEmail
+    });
+    return null;
+  }
 
-  const profile = await ensureUserProfile(user.id, user.email);
-  return profile;
+  console.log('[auth] signInWithProfile: Authentication succeeded', {
+    userId: user.id,
+    email: user.email,
+    emailConfirmed: user.email_confirmed_at ? 'yes' : 'no'
+  });
+
+  // Step 2: Fetch or create user profile
+  try {
+    const profile = await ensureUserProfile(user.id, user.email);
+    
+    if (profile) {
+      console.log('[auth] signInWithProfile: Profile lookup succeeded', {
+        userId: user.id,
+        hasProfile: !!profile,
+        plan: profile.plan,
+        email: profile.email
+      });
+    } else {
+      console.warn('[auth] signInWithProfile: Profile lookup returned null', {
+        userId: user.id
+      });
+    }
+    
+    return profile;
+  } catch (profileError: any) {
+    // Log detailed profile error information
+    console.error('[auth] signInWithProfile: Profile lookup failed', {
+      userId: user.id,
+      email: user.email,
+      errorMessage: profileError?.message,
+      errorCode: profileError?.code,
+      errorStatus: profileError?.status,
+      fullError: isDevMode ? profileError : undefined
+    });
+    
+    // If auth succeeded but profile lookup failed, provide specific error
+    const profileErrorMessage = profileError?.message || 'Unknown profile error';
+    const isRLSError = profileErrorMessage.includes('row-level security') || 
+                       profileErrorMessage.includes('RLS') || 
+                       profileErrorMessage.includes('policy');
+    
+    if (isRLSError) {
+      const enhancedError = new Error('Profile access denied. Please contact support.');
+      (enhancedError as any).originalError = profileError;
+      (enhancedError as any).errorCode = profileError?.code;
+      (enhancedError as any).errorType = 'profile_lookup';
+      throw enhancedError;
+    }
+    
+    // Re-throw with enhanced error info
+    const friendlyMessage = isDevMode 
+      ? `[DEV] Profile lookup failed: ${profileErrorMessage}`
+      : 'Unable to load your profile. Please try again or contact support.';
+    const enhancedError = new Error(friendlyMessage);
+    (enhancedError as any).originalError = profileError;
+    (enhancedError as any).errorCode = profileError?.code;
+    (enhancedError as any).errorType = 'profile_lookup';
+    throw enhancedError;
+  }
 }
 
 export async function fetchProfile(userId: string): Promise<AuthProfile | null> {
