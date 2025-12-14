@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, User } from 'lucide-react';
 import { updateProfile, updatePassword } from '../../services/auth';
 
 interface EditProfileModalProps {
@@ -33,10 +33,23 @@ export function EditProfileModal({
       setFirstName(currentFirstName || '');
       setLastName(currentLastName || '');
       setPassword('');
+      setShowPassword(false);
       setError(null);
       setSuccess(false);
     }
   }, [isOpen, currentFirstName, currentLastName]);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -91,97 +104,109 @@ export function EditProfileModal({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !isLoading) {
       onClose();
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 w-full max-w-md relative">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-          disabled={isLoading}
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Header */}
-        <div className="p-6 pb-4 border-b border-gray-200">
-          <h2 className="text-gray-900 text-xl">Edit Profile</h2>
-          <p className="text-gray-600 text-sm mt-1">Update your account information</p>
+      {/* Dark backdrop */}
+      <div className="absolute inset-0 bg-[#1C2A40]/80 backdrop-blur-sm" />
+      
+      {/* Modal */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-gray-200">
+        {/* Header with gradient */}
+        <div className="relative p-6 bg-gradient-to-r from-[#1C2A40] via-[#556B2F] to-[#4a5e28]">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+            disabled={isLoading}
+            aria-label="Close modal"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
+              <User className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-white text-xl font-semibold">Edit Profile</h2>
+              <p className="text-white/70 text-sm">Update your account information</p>
+            </div>
+          </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* Email (Read-only) */}
           <div>
-            <label htmlFor="email" className="block text-sm text-gray-700 mb-2">
+            <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
             <input
-              id="email"
+              id="edit-email"
               type="email"
               value={currentEmail || ''}
               disabled
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
             />
             <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
           </div>
 
           {/* First Name */}
           <div>
-            <label htmlFor="firstName" className="block text-sm text-gray-700 mb-2">
+            <label htmlFor="edit-firstName" className="block text-sm font-medium text-gray-700 mb-2">
               First Name
             </label>
             <input
-              id="firstName"
+              id="edit-firstName"
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/20 focus:border-[#556B2F]"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
               placeholder="John"
             />
           </div>
 
           {/* Last Name */}
           <div>
-            <label htmlFor="lastName" className="block text-sm text-gray-700 mb-2">
+            <label htmlFor="edit-lastName" className="block text-sm font-medium text-gray-700 mb-2">
               Last Name
             </label>
             <input
-              id="lastName"
+              id="edit-lastName"
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/20 focus:border-[#556B2F]"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
               placeholder="Doe"
             />
           </div>
 
           {/* Password */}
           <div>
-            <label htmlFor="password" className="block text-sm text-gray-700 mb-2">
+            <label htmlFor="edit-password" className="block text-sm font-medium text-gray-700 mb-2">
               New Password
             </label>
             <div className="relative">
               <input
-                id="password"
+                id="edit-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/20 focus:border-[#556B2F] pr-12"
-                placeholder="Leave blank to keep current password"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] pr-12 transition-colors"
+                placeholder="Leave blank to keep current"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 {showPassword ? (
                   <EyeOff className="w-5 h-5" />
@@ -195,15 +220,15 @@ export function EditProfileModal({
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
           {/* Success Message */}
           {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-sm text-green-600">Profile updated successfully!</p>
+            <div className="bg-[#556B2F]/10 border border-[#556B2F]/20 rounded-lg p-4">
+              <p className="text-sm text-[#556B2F] font-medium">✓ Profile updated successfully!</p>
             </div>
           )}
 
@@ -212,26 +237,21 @@ export function EditProfileModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-60 disabled:cursor-not-allowed font-medium"
               disabled={isLoading}
             >
               {isLoading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
-
-        {/* Tactical Brackets */}
-        <div className="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-[#556B2F]/20" />
-        <div className="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-[#556B2F]/20" />
       </div>
     </div>
   );
 }
-

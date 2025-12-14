@@ -332,6 +332,9 @@ function App() {
         onProfileUpdated={async () => {
           await refreshProfile();
         }}
+        onPreferencesComplete={async (prefs) => {
+          await handlePreferencesComplete(prefs);
+        }}
       />
     );
   };

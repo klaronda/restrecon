@@ -4,6 +4,7 @@ import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Dow
 import { UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
 import { EditProfileModal } from './edit-profile-modal';
+import { EditPreferencesModal } from './edit-preferences-modal';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchProfile } from '../../services/auth';
 
@@ -18,6 +19,7 @@ interface AccountPortalProps {
   preferences?: UserPreferences | null;
   onStartPreferences?: () => void;
   onProfileUpdated?: () => void;
+  onPreferencesComplete?: (prefs: UserPreferences) => void;
 }
 
 export function AccountPortal({
@@ -31,8 +33,10 @@ export function AccountPortal({
   preferences,
   onStartPreferences,
   onProfileUpdated,
+  onPreferencesComplete,
 }: AccountPortalProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
   const [profileFirstName, setProfileFirstName] = useState<string | null>(null);
   const [profileLastName, setProfileLastName] = useState<string | null>(null);
   
@@ -294,28 +298,24 @@ export function AccountPortal({
                     Transit: {preferences.toggles?.transitScore ? 'On' : 'Off'}
                   </span>
                 </div>
-                {onStartPreferences && (
-                  <button
-                    onClick={onStartPreferences}
-                    className="inline-flex items-center gap-2 text-[#556B2F] hover:underline text-sm"
-                  >
-                    Edit preferences
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
+                <button
+                  onClick={() => setIsPreferencesModalOpen(true)}
+                  className="inline-flex items-center gap-2 text-[#556B2F] hover:underline text-sm"
+                >
+                  Edit preferences
+                  <ChevronRight className="w-4 h-4" />
+                </button>
             </div>
             ) : (
               <div className="bg-[#556B2F]/5 border border-[#556B2F]/20 rounded-lg p-4">
                 <p className="text-gray-800 mb-2">Set up your preferences to get the best intel for your search.</p>
-                {onStartPreferences && (
-                  <button
-                    onClick={onStartPreferences}
-                    className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
-                  >
-                    Calibrate preferences
-              <ChevronRight className="w-4 h-4" />
-            </button>
-                )}
+                <button
+                  onClick={() => setIsPreferencesModalOpen(true)}
+                  className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
+                >
+                  Calibrate preferences
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             )}
           </div>
@@ -395,6 +395,20 @@ export function AccountPortal({
         currentLastName={profileLastName}
         currentEmail={userEmail}
         onProfileUpdated={handleProfileUpdated}
+      />
+
+      {/* Edit Preferences Modal */}
+      <EditPreferencesModal
+        isOpen={isPreferencesModalOpen}
+        onClose={() => setIsPreferencesModalOpen(false)}
+        userName={userName}
+        initialPreferences={preferences}
+        onComplete={(prefs) => {
+          if (onPreferencesComplete) {
+            onPreferencesComplete(prefs);
+          }
+          setIsPreferencesModalOpen(false);
+        }}
       />
     </div>
   );
