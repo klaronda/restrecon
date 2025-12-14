@@ -920,9 +920,8 @@ function App() {
           </div>
         </div>
       )}
-      {authReady ? (
       <Routes>
-        {/* Public Routes */}
+        {/* Public Routes - Always accessible */}
         <Route path="/" element={<LandingPage isLoggedIn={isLoggedIn} onLogout={handleLogout} />} />
         <Route 
           path="/signup" 
@@ -1054,14 +1053,6 @@ function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      ) : (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#556B2F] mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading...</p>
-          </div>
-        </div>
-      )}
     </Router>
   );
 }

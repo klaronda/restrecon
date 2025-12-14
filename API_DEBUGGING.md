@@ -124,3 +124,4 @@ supabase functions logs pro-recap --project-ref eqqbsiuqjnqpiiuumanu --follow
 Then trigger a request from the extension and watch the logs appear.
 
 
+
