@@ -69,6 +69,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         
         if (session && !sessionError) {
           // User is already logged in
+          // Allow multiple sessions - don't redirect if user wants to log in again
+          // Only redirect if this is an extension login flow
           if (isExtension && redirectUrl) {
             // Extension flow: redirect to extension callback
             console.log('[login-page] User already logged in, redirecting to extension', {
@@ -103,10 +105,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               setCheckingSession(false);
             }
           } else {
-            // Normal flow: redirect to account page
-            console.log('[login-page] User already logged in, redirecting to account');
-            navigate('/account', { replace: true });
-            return; // Don't set checkingSession to false, we're redirecting
+            // Normal flow: allow user to stay on login page or redirect
+            // Don't force redirect - user might want to log in from another device
+            console.log('[login-page] User already logged in, but allowing access to login page');
+            setCheckingSession(false);
+            // Optionally show a message that they're already logged in
           }
         } else {
           // Not logged in, show login form

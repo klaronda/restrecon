@@ -193,6 +193,55 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
     .maybeSingle();
 
   if (upsertError) {
+    // Handle duplicate key error - profile might exist with different auth_user_id
+    if (upsertError.code === '23505' || upsertError.message?.includes('duplicate key')) {
+      console.log('[auth] ensureUserProfile: Duplicate key error, profile likely exists with different auth_user_id', {
+        errorCode: upsertError.code,
+        constraint: upsertError.message?.includes('email') ? 'email' : 'unknown'
+      });
+      
+      // If it's an email constraint violation, try to fetch by email and update auth_user_id
+      if (email && (upsertError.message?.includes('email') || upsertError.message?.includes('users_email_key'))) {
+        console.log('[auth] ensureUserProfile: Email constraint violation, fetching by email to update auth_user_id');
+        const emailProfile = await ensureUserProfileByEmail(userId, email);
+        if (emailProfile) {
+          return emailProfile;
+        }
+      }
+      
+      // Try one more time to fetch by auth_user_id (might have been created in the meantime)
+      const { data: retryData } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+      
+      if (retryData) {
+        console.log('[auth] ensureUserProfile: Found profile on retry after duplicate key error');
+        return retryData;
+      }
+      
+      // If still not found, try by email one more time
+      if (email) {
+        const { data: emailRetryData } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+          .eq('email', email)
+          .maybeSingle();
+        
+        if (emailRetryData) {
+          console.log('[auth] ensureUserProfile: Found profile by email after duplicate key error, updating auth_user_id');
+          // Update auth_user_id to match
+          await supabase
+            .from('users')
+            .update({ auth_user_id: userId })
+            .eq('id', emailRetryData.id);
+          emailRetryData.auth_user_id = userId;
+          return emailRetryData;
+        }
+      }
+    }
+    
     console.error('[auth] ensureUserProfile: Failed to create profile', {
       errorMessage: upsertError.message,
       errorCode: upsertError.code,
