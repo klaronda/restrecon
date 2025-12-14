@@ -13,7 +13,7 @@ import { FAQPage } from './components/website/faq-page';
 import { PrivacyPolicyPage } from './components/website/privacy-policy-page';
 import { TermsOfServicePage } from './components/website/terms-of-service-page';
 import { supabase } from './lib/supabaseClient';
-import { AuthProfile, signInWithProfile, signOut, signUpWithProfile, fetchProfile } from './services/auth';
+import { AuthProfile, signInWithProfile, signOut, signUpWithProfile, fetchProfile, ensureUserProfile } from './services/auth';
 import { openCustomerPortal } from './services/payments';
 import { fetchPreferences, savePreferences, generateRecap, UserPreferences } from './services/preferences';
 import { OnboardingChat } from './components/onboarding-chat';
@@ -817,37 +817,31 @@ function App() {
         
         if (session?.user && isMounted) {
           try {
-            console.log('[App] Fetching profile for user:', session.user.id);
-            // Add timeout to profile fetch
-            const profilePromise = supabase
-              .from('users')
-              .select('first_name, last_name, email, plan, trial_ends_at')
-              .eq('auth_user_id', session.user.id)
-              .maybeSingle();
-            
-            const profileTimeout = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+            console.log('[App] Ensuring profile exists for user:', session.user.id);
+            // Use ensureUserProfile which will create a profile if it doesn't exist
+            const profileTimeout = new Promise<AuthProfile | null>((_, reject) => 
+              setTimeout(() => reject(new Error('Profile ensure timeout')), 3000)
             );
             
-            const profile = await Promise.race([profilePromise, profileTimeout]) as any;
+            const profile = await Promise.race([
+              ensureUserProfile(session.user.id, session.user.email),
+              profileTimeout
+            ]);
             
-            if (profile?.error) {
-              console.error('[App] Profile fetch error on init:', profile.error);
-            } else {
-              console.log('[App] Profile fetched from database:', {
-                data: profile?.data,
-                hasData: !!profile?.data,
-                plan: profile?.data?.plan,
-                firstName: profile?.data?.first_name,
-                lastName: profile?.data?.last_name,
-                email: profile?.data?.email
+            if (profile) {
+              console.log('[App] Profile ensured/loaded:', {
+                hasData: !!profile,
+                plan: profile?.plan,
+                firstName: profile?.first_name,
+                lastName: profile?.last_name,
+                email: profile?.email
               });
-              if (profile?.data) {
-                applyProfile(profile.data, session.user.email);
-              }
+              applyProfile(profile, session.user.email);
+            } else {
+              console.warn('[App] Profile ensure returned null');
             }
           } catch (profileErr) {
-            console.error('[App] Error fetching profile on init:', profileErr);
+            console.error('[App] Error ensuring profile on init:', profileErr);
             // Continue anyway - don't block the app
           }
         } else if (!session && isMounted) {
@@ -860,29 +854,24 @@ function App() {
           console.log('[App] Auth state changed:', event, { hasSession: !!session, userId: session?.user?.id });
           if (session?.user) {
             try {
-              console.log('[App] Auth state change - fetching profile for user:', session.user.id);
-              const profile = await supabase
-                .from('users')
-                .select('first_name, last_name, email, plan, trial_ends_at')
-                .eq('auth_user_id', session.user.id)
-                .maybeSingle();
-              if (profile.error) {
-                console.error('[App] Profile fetch error on auth state change:', profile.error);
-                resetAuthState();
-              } else {
-                console.log('[App] Profile fetched on auth state change:', {
-                  data: profile.data,
-                  plan: profile.data?.plan,
-                  firstName: profile.data?.first_name,
-                  lastName: profile.data?.last_name,
-                  email: profile.data?.email
+              console.log('[App] Auth state change - ensuring profile for user:', session.user.id);
+              // Use ensureUserProfile which will create a profile if it doesn't exist
+              const profile = await ensureUserProfile(session.user.id, session.user.email);
+              if (profile) {
+                console.log('[App] Profile ensured on auth state change:', {
+                  plan: profile.plan,
+                  firstName: profile.first_name,
+                  lastName: profile.last_name,
+                  email: profile.email
                 });
-                if (profile.data) {
-                  applyProfile(profile.data, session.user.email);
-                }
+                applyProfile(profile, session.user.email);
+              } else {
+                console.warn('[App] Profile ensure returned null on auth state change');
+                resetAuthState();
               }
             } catch (profileErr) {
               console.error('[App] Error in auth state change handler:', profileErr);
+              // Don't reset auth state on error - might be temporary
             }
           } else {
             console.log('[App] No session, resetting auth state');
