@@ -81,82 +81,119 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
       {/* Header */}
       <div className="relative bg-gradient-to-r from-[#1C2A40] via-[#556B2F] to-[#4a5e28] text-white">
         <div className="max-w-7xl mx-auto px-6 py-12">
-          <button
-            onClick={() => navigate('/account')}
-            className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Account
-          </button>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow">
-              <img
-                src="https://eqqbsiuqjnqpiiuumanu.supabase.co/storage/v1/object/public/site_assets/temp/Rover.svg"
-                alt="Rover"
-                className="w-10 h-10"
-              />
-            </div>
+          <div className="flex items-center gap-4">
+            <img
+              src="https://eqqbsiuqjnqpiiuumanu.supabase.co/storage/v1/object/public/site_assets/temp/Rover.svg"
+              alt="Rover"
+              className="w-16 h-16 brightness-0 invert"
+            />
             <div>
               <h1 className="text-white text-3xl font-bold">Edit Preferences</h1>
               <p className="text-white/70">Calibrate your recon parameters, {userName}</p>
             </div>
           </div>
-          
-          {/* Info card */}
-          <div className="bg-white/95 text-gray-900 rounded-lg p-4 border border-white/20 shadow-sm">
-            <p className="text-gray-700 text-sm">
-              We handle Zillow defaults. Tell us the mission intel to surface first.
-            </p>
-            <p className="text-gray-500 text-xs mt-1">
-              Already covered: price, beds/baths, square footage, school data.
-            </p>
-          </div>
-
-          {/* Step indicator */}
-          <div className="flex gap-2 mt-4">
-            <div className={`h-1 flex-1 rounded-full transition-colors ${step === 0 ? 'bg-[#F3A712]' : 'bg-white/30'}`} />
-            <div className={`h-1 flex-1 rounded-full transition-colors ${step === 1 ? 'bg-[#F3A712]' : 'bg-white/30'}`} />
-          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-6 py-12">
-        <div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl border-2 border-gray-200 p-6 sticky top-6">
+              <div className="flex items-center gap-3 mb-6">
+                <button
+                  onClick={() => navigate('/account')}
+                  className="inline-flex items-center gap-2 text-[#556B2F] hover:text-[#4a5e28] transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Account
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gradient-to-br from-[#556B2F]/5 to-[#556B2F]/10 rounded-lg p-4 border border-[#556B2F]/20">
+                  <h3 className="font-semibold text-gray-900 mb-2">Mission Brief</h3>
+                  <p className="text-sm text-gray-700 mb-3">
+                    We handle Zillow defaults. Tell us the mission intel to surface first.
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Already covered: price, beds/baths, square footage, school data.
+                  </p>
+                </div>
+
+                {/* Step indicator */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Progress</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full transition-colors ${
+                        step >= 0 ? 'bg-[#F3A712]' : 'bg-gray-300'
+                      }`} />
+                      <span className={`text-sm ${step >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                        Target Locations
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full transition-colors ${
+                        step >= 1 ? 'bg-[#F3A712]' : 'bg-gray-300'
+                      }`} />
+                      <span className={`text-sm ${step >= 1 ? 'text-gray-900' : 'text-gray-500'}`}>
+                        Mobility Signals
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Form */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl border-2 border-gray-200 p-8">
           {step === 0 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-gray-900 font-semibold text-lg mb-2">Target Locations</h2>
-                <p className="text-gray-600 text-sm mb-4">
-                  Add up to 5 place types that matter (e.g., preschools, golf courses), plus max miles away.
-                </p>
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-[#556B2F]/10 rounded-lg flex items-center justify-center">
+                  <Plus className="w-5 h-5 text-[#556B2F]" />
+                </div>
+                <div>
+                  <h2 className="text-gray-900 font-semibold text-xl">Target Locations</h2>
+                  <p className="text-gray-600 text-sm">Add places that matter to your search</p>
+                </div>
               </div>
               
-              <div className="flex flex-wrap gap-3">
-                <input
-                  value={newTagLabel}
-                  onChange={(e) => setNewTagLabel(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="e.g., preschools, skateparks"
-                  className="flex-1 min-w-[180px] px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={newTagDistance}
-                  onChange={(e) => setNewTagDistance(Number(e.target.value))}
-                  className="w-24 px-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors text-center"
-                  placeholder="Miles"
-                />
-                <button
-                  onClick={addTag}
-                  disabled={tags.length >= 5 || !newTagLabel.trim()}
-                  className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add
-                </button>
+              <div className="space-y-4">
+                <p className="text-gray-600 text-sm">
+                  Add up to 5 place types that matter to your search, plus max distance in miles.
+                </p>
+
+                <div className="flex flex-wrap gap-3">
+                  <input
+                    value={newTagLabel}
+                    onChange={(e) => setNewTagLabel(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="e.g., preschools, skateparks, coffee shops"
+                    className="flex-1 min-w-[220px] px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={newTagDistance}
+                    onChange={(e) => setNewTagDistance(Number(e.target.value))}
+                    className="w-24 px-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors text-center"
+                    placeholder="Miles"
+                  />
+                  <button
+                    onClick={addTag}
+                    disabled={tags.length >= 5 || !newTagLabel.trim()}
+                    className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -187,15 +224,22 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
           )}
 
           {step === 1 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-gray-900 font-semibold text-lg mb-2">Mobility Signals</h2>
-                <p className="text-gray-600 text-sm mb-4">
-                  Toggle the mobility scores that matter to you.
-                </p>
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-[#556B2F]/10 rounded-lg flex items-center justify-center">
+                  <Settings className="w-5 h-5 text-[#556B2F]" />
+                </div>
+                <div>
+                  <h2 className="text-gray-900 font-semibold text-xl">Mobility Signals</h2>
+                  <p className="text-gray-600 text-sm">Configure mobility preferences</p>
+                </div>
               </div>
               
-              <div className="grid sm:grid-cols-3 gap-3">
+              <p className="text-gray-600 text-sm mb-6">
+                Select the mobility scores that matter most to your lifestyle.
+              </p>
+
+              <div className="grid sm:grid-cols-3 gap-4">
                 {[
                   { key: 'walkScore', label: 'Walkability', description: 'Walk Score®' },
                   { key: 'bikeScore', label: 'Bikeability', description: 'Bike Score®' },
@@ -203,9 +247,9 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                 ].map((item) => (
                   <label
                     key={item.key}
-                    className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    className={`flex items-center gap-4 p-5 rounded-lg border-2 cursor-pointer transition-all hover:shadow-sm ${
                       (toggles as any)[item.key]
-                        ? 'border-[#556B2F] bg-[#556B2F]/5'
+                        ? 'border-[#556B2F] bg-[#556B2F]/5 shadow-sm'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -217,54 +261,61 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                       }
                       className="sr-only"
                     />
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
                       (toggles as any)[item.key]
                         ? 'bg-[#556B2F] border-[#556B2F]'
                         : 'border-gray-300'
                     }`}>
                       {(toggles as any)[item.key] && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 12 12">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 12 12">
                           <path d="M3.707 5.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4a1 1 0 00-1.414-1.414L5 6.586 3.707 5.293z" />
                         </svg>
                       )}
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-gray-800">{item.label}</span>
+                      <span className="font-medium text-gray-800">{item.label}</span>
+                      <p className="text-xs text-gray-500 mt-1">{item.description}</p>
                     </div>
                   </label>
                 ))}
               </div>
 
-              <div className="pt-2">
-                <h3 className="text-gray-900 font-medium mb-2">Additional Notes</h3>
-                <p className="text-gray-600 text-sm mb-3">
-                  Anything else Zillow doesn't filter for? Drop it here so we can keep it in focus.
-                </p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#556B2F]/10 rounded-lg flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-[#556B2F]" />
+                  </div>
+                  <div>
+                    <h3 className="text-gray-900 font-medium">Additional Notes</h3>
+                    <p className="text-gray-600 text-sm">Any other preferences we should know about?</p>
+                  </div>
+                </div>
+
                 <textarea
                   value={otherPreferences}
                   onChange={(e) => setOtherPreferences(e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors resize-none"
-                  placeholder="e.g., Need a big backyard, prefer quiet streets, want natural light..."
+                  placeholder="e.g., Need a big backyard, prefer quiet streets, want natural light, must have garage..."
                 />
               </div>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+          <div className="flex gap-4 mt-8 pt-6 border-t border-gray-200">
             {step === 0 ? (
               <>
                 <button
                   type="button"
                   onClick={() => navigate('/account')}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  className="px-6 py-3 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => setStep(1)}
-                  className="flex-1 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors font-medium"
+                  className="px-6 py-3 bg-[#556B2F] text-white rounded-lg hover:bg-[#4a5e28] transition-colors font-medium"
                 >
                   Next: Mobility + Extras
                 </button>
@@ -274,19 +325,21 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                 <button
                   type="button"
                   onClick={() => setStep(0)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  className="px-6 py-3 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleComplete}
                   disabled={isSaving}
-                  className="flex-1 bg-[#556B2F] text-white px-4 py-3 rounded-lg hover:bg-[#4a5e28] transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="px-6 py-3 bg-[#556B2F] text-white rounded-lg hover:bg-[#4a5e28] transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isSaving ? 'Saving...' : 'Save Preferences'}
                 </button>
               </>
             )}
+          </div>
+            </div>
           </div>
         </div>
       </div>
