@@ -963,22 +963,20 @@ function App() {
                 );
               }
               
-              // Check session directly to avoid race condition with state updates
-              const checkSession = async () => {
-                const { data } = await supabase.auth.getSession();
-                return !!data.session;
-              };
-              
-              // Use a synchronous check: if we have a session OR isLoggedIn is true, allow access
-              // This prevents redirect loops when state hasn't updated yet
-              const hasSession = supabase.auth.getSession().then(({ data }) => !!data.session).catch(() => false);
-              
-              // For now, check isLoggedIn but also allow if we have user data (profile was loaded)
+              // Check if we have user data (profile was loaded) - this indicates a valid session
+              // This prevents redirect loops when isLoggedIn state hasn't updated yet
               const hasUserData = userName || userEmail;
               
               if (!isLoggedIn && !hasUserData) {
                 console.log('[App] Not logged in and no user data, redirecting to login');
                 return <Navigate to="/login" replace />;
+              }
+              
+              // If we have user data but isLoggedIn is false, it's likely a state sync issue
+              // Set isLoggedIn to true to fix the state
+              if (hasUserData && !isLoggedIn) {
+                console.log('[App] User data exists but isLoggedIn is false, fixing state');
+                setIsLoggedIn(true);
               }
               
               if (showPrefsWizard) {
