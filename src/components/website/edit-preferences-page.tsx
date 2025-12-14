@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Settings } from 'lucide-react';
 import { PreferenceTag, PreferenceToggles, UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
 
@@ -15,13 +15,15 @@ type WizardStep = 0 | 1;
 export function EditPreferencesPage({ userName, initialPreferences, onComplete }: EditPreferencesPageProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>(0);
-  const [otherPreferences, setOtherPreferences] = useState('');
   const [tags, setTags] = useState<PreferenceTag[]>([]);
   const [newTagLabel, setNewTagLabel] = useState('');
   const [toggles, setToggles] = useState<PreferenceToggles>({
     walkScore: true,
     bikeScore: false,
     transitScore: false,
+    airQuality: false,
+    soundScore: false,
+    stargazeScore: false,
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -36,8 +38,10 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
         walkScore: Boolean(initialPreferences.toggles?.walkScore),
         bikeScore: Boolean(initialPreferences.toggles?.bikeScore),
         transitScore: Boolean(initialPreferences.toggles?.transitScore),
+        airQuality: Boolean(initialPreferences.toggles?.airQuality),
+        soundScore: Boolean(initialPreferences.toggles?.soundScore),
+        stargazeScore: Boolean(initialPreferences.toggles?.stargazeScore),
       });
-      setOtherPreferences(initialPreferences.otherPreferences || '');
     }
   }, [initialPreferences]);
 
@@ -54,12 +58,11 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
   const handleComplete = async () => {
     setIsSaving(true);
     try {
-      const prefs: UserPreferences = {
-        tags,
-        toggles,
-        freeformInput: undefined,
-        otherPreferences,
-      };
+    const prefs: UserPreferences = {
+      tags,
+      toggles,
+      freeformInput: undefined,
+    };
       await onComplete(prefs);
       navigate('/account');
     } catch (err) {
@@ -141,7 +144,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                         step >= 1 ? 'bg-[#F3A712]' : 'bg-gray-300'
                       }`} />
                       <span className={`text-sm ${step >= 1 ? 'text-gray-900' : 'text-gray-500'}`}>
-                        Mobility Signals
+                        Environment
                       </span>
                     </div>
                   </div>
@@ -222,13 +225,13 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                   <Settings className="w-5 h-5 text-[#556B2F]" />
                 </div>
                 <div>
-                  <h2 className="text-gray-900 font-semibold text-xl">Mobility Signals</h2>
-                  <p className="text-gray-600 text-sm">Configure mobility preferences</p>
+                  <h2 className="text-gray-900 font-semibold text-xl">Environment</h2>
+                  <p className="text-gray-600 text-sm">Configure environmental preferences</p>
                 </div>
               </div>
               
               <p className="text-gray-600 text-sm mb-6">
-                Select the mobility scores that matter most to your lifestyle.
+                Select the environmental factors that matter most to your lifestyle.
               </p>
 
               <div className="grid sm:grid-cols-3 gap-4">
@@ -236,6 +239,9 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                   { key: 'walkScore', label: 'Walkability', description: 'Walk Score®' },
                   { key: 'bikeScore', label: 'Bikeability', description: 'Bike Score®' },
                   { key: 'transitScore', label: 'Transit Access', description: 'Transit Score®' },
+                  { key: 'airQuality', label: 'Air Quality', description: 'Air quality index' },
+                  { key: 'soundScore', label: 'Sound Score', description: 'Noise pollution level' },
+                  { key: 'stargazeScore', label: 'Stargaze Score', description: 'Light pollution level' },
                 ].map((item) => (
                   <label
                     key={item.key}
@@ -271,26 +277,6 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                   </label>
                 ))}
               </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#556B2F]/10 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-[#556B2F]" />
-                  </div>
-                  <div>
-                    <h3 className="text-gray-900 font-medium">Additional Notes</h3>
-                    <p className="text-gray-600 text-sm">Any other preferences we should know about?</p>
-                  </div>
-                </div>
-
-                <textarea
-                  value={otherPreferences}
-                  onChange={(e) => setOtherPreferences(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] transition-colors resize-none"
-                  placeholder="e.g., Need a big backyard, prefer quiet streets, want natural light, must have garage..."
-                />
-              </div>
             </div>
           )}
 
@@ -309,7 +295,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete }
                   onClick={() => setStep(1)}
                   className="px-6 py-3 bg-[#556B2F] text-white rounded-lg hover:bg-[#4a5e28] transition-colors font-medium"
                 >
-                  Next: Mobility + Extras
+                  Next: Environment
                 </button>
               </>
             ) : (

@@ -8,6 +8,9 @@ export type PreferenceToggles = {
   walkScore?: boolean;
   bikeScore?: boolean;
   transitScore?: boolean;
+  airQuality?: boolean;
+  soundScore?: boolean;
+  stargazeScore?: boolean;
 };
 
 export type UserPreferences = {
