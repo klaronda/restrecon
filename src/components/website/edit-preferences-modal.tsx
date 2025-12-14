@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Settings } from 'lucide-react';
 import { PreferenceTag, PreferenceToggles, UserPreferences } from '../../services/preferences';
 
@@ -64,8 +65,6 @@ export function EditPreferencesModal({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const addTag = () => {
     if (!newTagLabel.trim() || tags.length >= 5) return;
     setTags((prev) => [...prev, { label: newTagLabel.trim(), distanceMiles: newTagDistance || 5 }]);
@@ -88,6 +87,8 @@ export function EditPreferencesModal({
     onClose();
   };
 
+  if (!isOpen) return null;
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -101,16 +102,16 @@ export function EditPreferencesModal({
     }
   };
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6"
       onClick={handleBackdropClick}
     >
       {/* Dark backdrop */}
       <div className="absolute inset-0 bg-[#1C2A40]/80 backdrop-blur-sm" />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border-2 border-gray-200 max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border-2 border-gray-200 max-h-[90vh] flex flex-col z-[101]">
         {/* Header with gradient */}
         <div className="relative p-6 bg-gradient-to-r from-[#1C2A40] via-[#556B2F] to-[#4a5e28]">
           {/* Close button */}
@@ -325,5 +326,7 @@ export function EditPreferencesModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
