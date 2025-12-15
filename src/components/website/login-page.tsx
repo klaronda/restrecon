@@ -16,7 +16,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<{ code?: string; status?: string; original?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(false); // Skip session check to fix login issues
+  const [checkingSession, setCheckingSession] = useState(true);
   
   const isDevMode = import.meta.env.DEV;
 
@@ -25,9 +25,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const redirectUrl = searchParams.get('redirect');
   const stateToken = searchParams.get('state');
 
-  // DISABLED: Complex session checking was causing login issues
   // Check if user is already logged in (for both extension and normal flow)
-  /*
   useEffect(() => {
     let isMounted = true;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -84,47 +82,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         
         if (session && !sessionError) {
           // User is already logged in
-          // Allow multiple sessions - don't redirect if user wants to log in again
-          // Only redirect if this is an extension login flow
           if (isExtension && redirectUrl) {
-            // Extension flow: redirect to extension callback
-            console.log('[login-page] User already logged in, redirecting to extension', {
-              hasAccessToken: !!session.access_token,
-              hasRefreshToken: !!session.refresh_token,
-              redirectUrl
-            });
-            try {
-              // Manually construct URL for chrome-extension:// protocol
-              // Use hash fragments instead of query params for better compatibility
-              let finalUrl = redirectUrl;
-              const hashParams = new URLSearchParams();
-              hashParams.set('access_token', session.access_token);
-              hashParams.set('refresh_token', session.refresh_token);
-              if (stateToken) {
-                hashParams.set('state', stateToken);
-              }
-              
-              // Append hash fragment
-              const hashString = hashParams.toString();
-              if (redirectUrl.includes('#')) {
-                finalUrl += `&${hashString}`;
-              } else {
-                finalUrl += `#${hashString}`;
-              }
-              
-              console.log('[login-page] Redirecting to extension:', finalUrl.substring(0, 100) + '...');
-              window.location.href = finalUrl;
-              return; // Don't set checkingSession to false, we're redirecting
-            } catch (urlErr) {
-              console.error('[login-page] Error constructing callback URL for existing session:', urlErr);
-              setCheckingSession(false);
-            }
-          } else {
-            // Normal flow: allow user to stay on login page or redirect
-            // Don't force redirect - user might want to log in from another device
-            console.log('[login-page] User already logged in, but allowing access to login page');
+            // EXTENSION FLOW: Even if already logged in, show the login form
+            // This allows the extension to get its own session/authentication
+            console.log('[login-page] User already logged in, but showing login form for extension auth');
             setCheckingSession(false);
-            // Optionally show a message that they're already logged in
+          } else {
+            // NORMAL FLOW: User is already logged in, redirect to account
+            console.log('[login-page] User already logged in, redirecting to account');
+            navigate('/account');
+            return;
           }
         } else {
           // Not logged in, show login form
@@ -150,7 +117,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       }
     };
   }, [isExtension, redirectUrl, stateToken, navigate]);
-  */
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
