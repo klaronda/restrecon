@@ -131,30 +131,43 @@ export async function signUpWithProfile(payload: SignUpPayload): Promise<AuthPro
  * Ensures a user profile exists. Fetches by auth_user_id first, then email, creates if missing.
  */
 export async function ensureUserProfile(userId: string, email?: string | null): Promise<AuthProfile | null> {
+  console.log('[auth] ensureUserProfile called', { userId, hasEmail: !!email });
+
   // Step 1: Try by auth_user_id
+  console.log('[auth] Step 1: Querying by auth_user_id');
   const { data, error } = await supabase
     .from('users')
     .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
     .eq('auth_user_id', userId)
     .maybeSingle();
 
-  if (data) return data;
-  
-  if (error && import.meta.env.DEV) {
-    console.error('[auth] ensureUserProfile: Query error', error.message);
+  console.log('[auth] Step 1 result', { hasData: !!data, hasError: !!error });
+
+  if (data) {
+    console.log('[auth] Found profile by auth_user_id');
+    return data;
+  }
+
+  if (error) {
+    console.error('[auth] ensureUserProfile: Query error', error);
   }
 
   // Step 2: Fallback - try by email
   if (email) {
-    const { data: emailData } = await supabase
+    console.log('[auth] Step 2: Querying by email');
+    const { data: emailData, error: emailError } = await supabase
       .from('users')
       .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
       .eq('email', email)
       .maybeSingle();
-    
+
+    console.log('[auth] Step 2 result', { hasEmailData: !!emailData, hasEmailError: !!emailError });
+
     if (emailData) {
+      console.log('[auth] Found profile by email, updating auth_user_id if needed');
       // Update auth_user_id if it doesn't match
       if (emailData.auth_user_id !== userId) {
+        console.log('[auth] Updating auth_user_id');
         await supabase.from('users').update({ auth_user_id: userId }).eq('id', emailData.id);
         emailData.auth_user_id = userId;
       }
@@ -163,7 +176,10 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
   }
 
   // Step 3: Create new profile
+  console.log('[auth] Step 3: Creating new profile');
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  console.log('[auth] Trial ends at:', trialEndsAt);
+
   const { data: created, error: createError } = await supabase
     .from('users')
     .upsert({
@@ -175,10 +191,17 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
     .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
     .maybeSingle();
 
-  if (created) return created;
+  console.log('[auth] Step 3 result', { hasCreated: !!created, hasCreateError: !!createError });
+
+  if (created) {
+    console.log('[auth] Profile created successfully');
+    return created;
+  }
 
   // Handle duplicate key - profile was created by another request
+  console.log('[auth] Handling create error', { code: createError?.code, message: createError?.message });
   if (createError?.code === '23505') {
+    console.log('[auth] Duplicate key error, retrying fetch');
     const { data: retry } = await supabase
       .from('users')
       .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
@@ -202,10 +225,14 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
 }
 
 export async function signInWithProfile(email: string, password: string): Promise<AuthProfile | null> {
+  console.log('[auth] signInWithProfile called');
   // Authenticate
+  console.log('[auth] Calling supabase.auth.signInWithPassword');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  
+  console.log('[auth] Supabase auth result', { hasData: !!data, hasError: !!error, hasUser: !!data?.user });
+
   if (error) {
+    console.error('[auth] Supabase auth error:', error);
     const friendlyMessage = getSignInErrorMessage(error);
     const enhancedError = new Error(friendlyMessage);
     (enhancedError as any).originalError = error;
@@ -217,12 +244,16 @@ export async function signInWithProfile(email: string, password: string): Promis
   const user = data.user;
   if (!user) return null;
 
+  console.log('[auth] User authenticated, calling ensureUserProfile');
   // Fetch or create profile
   try {
-    return await ensureUserProfile(user.id, user.email);
+    const profile = await ensureUserProfile(user.id, user.email);
+    console.log('[auth] ensureUserProfile completed', { hasProfile: !!profile });
+    return profile;
   } catch (profileError: any) {
+    console.error('[auth] signInWithProfile: Profile error', profileError.message);
     if (import.meta.env.DEV) {
-      console.error('[auth] signInWithProfile: Profile error', profileError.message);
+      console.error('[auth] Full profile error:', profileError);
     }
     throw new Error('Unable to load your profile. Please try again or contact support.');
   }
