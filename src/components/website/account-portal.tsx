@@ -187,10 +187,9 @@ export function AccountPortal({
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-5 h-5 text-red-600" />
                     <p className="text-gray-900">Trial Expired</p>
-                    <span className="text-xs text-red-700 bg-red-100 px-2 py-1 rounded">Plan: Expired</span>
                   </div>
                   <p className="text-sm text-gray-600">
-                    Your free trial has ended. Upgrade to NestRecon Pro to continue enjoying personalized property scoring, AI insights, and environmental data.
+                    Upgrade to NestRecon Pro for just $9 a month to continue seeing personalized Fit Scores and deeper neighborhood insight.
                   </p>
                 </div>
                 <Link
