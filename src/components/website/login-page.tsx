@@ -16,7 +16,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<{ code?: string; status?: string; original?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(false); // Skip session check to fix login issues
   
   const isDevMode = import.meta.env.DEV;
 
@@ -25,7 +25,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const redirectUrl = searchParams.get('redirect');
   const stateToken = searchParams.get('state');
 
+  // DISABLED: Complex session checking was causing login issues
   // Check if user is already logged in (for both extension and normal flow)
+  /*
   useEffect(() => {
     let isMounted = true;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -148,6 +150,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       }
     };
   }, [isExtension, redirectUrl, stateToken, navigate]);
+  */
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
