@@ -36,7 +36,7 @@ interface EvaluatedTarget {
 interface UserPrefs {
   placeTargets: PlaceTarget[];
   mobilitySignals: MobilitySignal[];
-  environmentalSignals?: ('sound' | 'air' | 'stargazing')[];
+  environmentalPrefs?: ('airQuality' | 'soundScore' | 'stargazeScore')[];
   extraFocusNotes?: string;
 }
 
@@ -859,6 +859,30 @@ function scoreMobilityFree(mob?: ListingPayload['mobility']) {
  * Scores mobility for Pro users - only uses signals the user selected.
  * If user checked Walk + Bike, only those are scored. Transit is ignored if not selected.
  */
+function scoreEnvironmentFit(env?: ListingPayload['environment'], prefs?: ('airQuality' | 'soundScore' | 'stargazeScore')[]) {
+  // Environmental scoring: penalize poor scores when user cares about these factors
+  const scores: number[] = [];
+  const include = new Set(prefs || []);
+
+  if (include.has('soundScore') && env?.soundScore != null) {
+    // Sound scores: higher = quieter (better). Penalize noisy areas
+    const soundNormalized = Math.min(env.soundScore / 10, 10); // 0-100 → 0-10 scale
+    scores.push(soundNormalized);
+  }
+
+  if (include.has('airQuality') && env?.airScore != null) {
+    // Air quality scores: higher = better air. Penalize poor air quality
+    scores.push(env.airScore / 10); // 0-100 → 0-10 scale
+  }
+
+  if (include.has('stargazeScore') && env?.stargazingScore != null) {
+    // Stargazing scores: higher = better conditions. Penalize light pollution
+    scores.push(env.stargazingScore / 10); // 0-100 → 0-10 scale
+  }
+
+  return scores.length ? avg(scores) : null; // Return null if no environmental prefs selected
+}
+
 function scoreMobilityFit(mob?: ListingPayload['mobility'], signals?: MobilitySignal[]) {
   const sel: number[] = [];
   const include = new Set(signals || []);
@@ -872,31 +896,6 @@ function scoreMobilityFit(mob?: ListingPayload['mobility'], signals?: MobilitySi
  * Scores environment fit for Pro users - only uses environmental factors the user selected.
  * If user checked Air Quality + Sound Score, only those are scored. Stargazing is ignored if not selected.
  */
-function scoreEnvironmentFit(env?: ListingPayload['environment'], signals?: ('airQuality' | 'soundScore' | 'stargazeScore')[]) {
-  // Score environmental factors for Pro users - only uses signals the user selected
-  const scores: number[] = [];
-  const include = new Set(signals || []);
-
-  if (include.has('soundScore') && env?.soundScore != null) {
-    // Sound scores: higher is better (more quiet), normalize to 0-10 scale
-    // Sound scores are typically 0-100 where higher is quieter
-    scores.push(Math.min(env.soundScore / 10, 10));
-  }
-
-  if (include.has('airQuality') && env?.airScore != null) {
-    // Air quality scores: already 0-100 scale, convert to 0-10
-    // Higher scores = better air quality
-    scores.push(env.airScore / 10);
-  }
-
-  if (include.has('stargazeScore') && env?.stargazingScore != null) {
-    // Stargazing scores: already 0-100 scale, convert to 0-10
-    // Higher scores = better stargazing conditions
-    scores.push(env.stargazingScore / 10);
-  }
-
-  return scores.length ? avg(scores) : 5; // Default to neutral if no signals or data
-}
 
 /**
  * Scores targets fit for Pro users with coverage modifier.
@@ -1438,29 +1437,62 @@ async function generateAIRecap(
       : 'None specified';
 
     // Build environmental context
-    const envContext = [];
-    if (listing.environment?.sound && prefs.environmentalSignals?.includes('sound')) {
-      envContext.push(`Sound: ${listing.environment.sound.toLowerCase()}`);
+    const envParts: string[] = [];
+    if (prefs.environmentalPrefs?.includes('soundScore') && listing.environment?.soundScore != null) {
+      const soundLabel = listing.environment.soundScore > 75 ? 'quiet' :
+                        listing.environment.soundScore > 50 ? 'moderate' : 'noisy';
+      envParts.push(`${soundLabel} sound levels`);
     }
-    if (listing.environment?.air && prefs.environmentalSignals?.includes('air')) {
-      envContext.push(`Air quality: ${listing.environment.air.toLowerCase()}`);
+    if (prefs.environmentalPrefs?.includes('airQuality') && listing.environment?.airScore != null) {
+      const airLabel = listing.environment.airScore > 75 ? 'excellent' :
+                      listing.environment.airScore > 50 ? 'good' :
+                      listing.environment.airScore > 25 ? 'fair' : 'poor';
+      envParts.push(`${airLabel} air quality`);
     }
-    if (listing.environment?.sky && prefs.environmentalSignals?.includes('stargazing')) {
-      envContext.push(`Stargazing: ${listing.environment.sky.toLowerCase()}`);
+    if (prefs.environmentalPrefs?.includes('stargazeScore') && listing.environment?.stargazingScore != null) {
+      const skyLabel = listing.environment.stargazingScore > 75 ? 'excellent' :
+                      listing.environment.stargazingScore > 50 ? 'good' :
+                      listing.environment.stargazingScore > 25 ? 'fair' : 'poor';
+      envParts.push(`${skyLabel} stargazing conditions`);
     }
-    const envSummary = envContext.length ? envContext.join(', ') : 'Not evaluated';
+    const envSummary = envParts.length ? envParts.join(', ') : 'Not evaluated';
+
+    // Build school quality context
+    const schoolParts: string[] = [];
+    if (listing.schools && listing.schools.length > 0) {
+      const avgSchoolScore = listing.schools.reduce((sum, s) => sum + s.score, 0) / listing.schools.length;
+      const schoolQuality = avgSchoolScore > 8 ? 'excellent' :
+                           avgSchoolScore > 6 ? 'good' :
+                           avgSchoolScore > 4 ? 'average' : 'poor';
+      schoolParts.push(`${schoolQuality} schools`);
+    }
+    const schoolSummary = schoolParts.length ? schoolParts.join(', ') : 'School data not available';
+
+    // Summarize what's actually available nearby
+    const availabilitySummary = targetScores.map(t => {
+      if (!t.places || t.places.length === 0) {
+        return `${t.label}: not available nearby`;
+      }
+      const closest = t.places[0];
+      const access = closest.distanceMiles < 0.5 ? 'very close' :
+                    closest.distanceMiles < 2 ? 'close' :
+                    closest.distanceMiles < 5 ? 'convenient' : 'far';
+      return `${t.label}: ${access}`;
+    }).join(', ');
 
     const prompt = `Property: ${listing.address || 'Unknown address'}
 ${listing.basics?.beds ? `${listing.basics.beds} bed, ${listing.basics.baths} bath, ${listing.basics.sqft?.toLocaleString()} sqft` : ''}
 ${listing.basics?.year ? `Built ${listing.basics.year}` : ''}
 
-Priority locations: ${prioritiesList}
+What's nearby: ${availabilitySummary || 'Limited amenities nearby'}
 
-Environmental preferences: ${envSummary}
+School quality: ${schoolSummary}
 
-${prefs.extraFocusNotes ? `Additional notes: ${prefs.extraFocusNotes}` : ''}
+Environmental factors: ${envSummary}
 
-Provide a brief, honest assessment (1-2 sentences max) focusing on fit for their priorities. Be specific about distances and environmental factors. Use conversational language and be actionable. Use "we" instead of "I" when making recommendations. Focus on what's most important to them based on their selected preferences.`;
+${prefs.extraFocusNotes ? `Additional context: ${prefs.extraFocusNotes}` : ''}
+
+You are a friendly, direct real estate advisor. Give a clear recommendation (1-2 sentences): should this buyer pursue this property or look elsewhere? Be honest about drawbacks but keep it conversational. Consider lifestyle fit and long-term needs. Keep it simple and friendly.`;
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -1522,21 +1554,6 @@ function buildRecapFallback(listing: ListingPayload, prefs: UserPrefs, targetSco
     }
   }
 
-  // Add environmental context if user has environmental preferences
-  const envParts: string[] = [];
-  if (listing.environment?.sound && prefs.environmentalSignals?.includes('sound')) {
-    envParts.push(`${(listing.environment as any).sound} sound levels`);
-  }
-  if (listing.environment?.air && prefs.environmentalSignals?.includes('air')) {
-    envParts.push(`${(listing.environment as any).air} air quality`);
-  }
-  if (listing.environment?.sky && prefs.environmentalSignals?.includes('stargazing')) {
-    envParts.push(`${(listing.environment as any).sky} stargazing conditions`);
-  }
-
-  if (envParts.length > 0) {
-    parts.push(`Environment: ${envParts.join(', ')}`);
-  }
 
   if (prefs.extraFocusNotes) {
     parts.push(`Notes: ${prefs.extraFocusNotes}`);
@@ -1566,41 +1583,61 @@ async function scorePro(listing: ListingPayload, prefs: UserPrefs): Promise<ProR
   
   // ===== PRO SCORE: Mission Fit Score (Personalized) =====
   // Detect Free vs Pro mode
-  const isProMode = (prefs.placeTargets?.length ?? 0) > 0 || 
-                   (prefs.mobilitySignals?.length ?? 0) > 0;
-  
+  const hasTargets = (prefs.placeTargets?.length ?? 0) > 0;
+  const hasMobility = (prefs.mobilitySignals?.length ?? 0) > 0;
+  const hasEnvironment = (prefs.environmentalPrefs?.length ?? 0) > 0;
+  const isProMode = hasTargets || hasMobility || hasEnvironment;
+
   let missionFitScore: number;
   let targetsFitScore: number | undefined;
   let mobilityFitScore: number | undefined;
+  let environmentFitScore: number | undefined;
   const targetScores: number[] = [];
-  
+
   if (isProMode) {
-    // Pro mode: Personalized score based on user's Targets, Mobility, and Environment preferences
-    // Formula: Targets Fit 30% + Mobility Fit 15% + Environment Fit 25% + Schools 15% + Home Basics 15%
+    // Pro mode: Personalized score based on user's preferences
+    // Dynamic formula based on what user cares about
 
-    // Calculate targets fit (with coverage modifier)
-    targetsFitScore = scoreTargetsFit(listing.targets);
+    let totalWeight = 0;
+    let pro0to10 = 0;
 
-    // Calculate mobility fit (only user-selected signals)
-    mobilityFitScore = scoreMobilityFit(listing.mobility, prefs.mobilitySignals);
+    // Calculate targets fit (with coverage modifier) - 40% if user has targets
+    if (hasTargets) {
+      targetsFitScore = scoreTargetsFit(listing.targets);
+      pro0to10 += targetsFitScore * 0.40;
+      totalWeight += 0.40;
 
-    // Calculate environment fit (based on user's environmental preferences)
-    const environmentFitScore = scoreEnvironmentFit(listing.environment, prefs.environmentalSignals);
-
-    // Get target scores for debug/display
-    if (listing.targets && listing.targets.length > 0) {
-      listing.targets.forEach(t => targetScores.push(scoreTarget(t)));
+      // Get target scores for debug/display
+      if (listing.targets && listing.targets.length > 0) {
+        listing.targets.forEach(t => targetScores.push(scoreTarget(t)));
+      }
     }
 
-    const pro0to10 =
-      targetsFitScore * 0.30 +
-      mobilityFitScore * 0.15 +
-      environmentFitScore * 0.25 +
-      schoolsScore * 0.15 +
-      basicsScore * 0.15;
+    // Calculate mobility fit - 25% if user has mobility prefs
+    if (hasMobility) {
+      mobilityFitScore = scoreMobilityFit(listing.mobility, prefs.mobilitySignals);
+      pro0to10 += mobilityFitScore * 0.25;
+      totalWeight += 0.25;
+    }
+
+    // Calculate environment fit - 25% if user has environmental prefs
+    if (hasEnvironment) {
+      environmentFitScore = scoreEnvironmentFit(listing.environment, prefs.environmentalPrefs);
+      if (environmentFitScore !== null) {
+        pro0to10 += environmentFitScore * 0.25;
+        totalWeight += 0.25;
+      }
+    }
+
+    // Distribute remaining weight to schools (20%) and basics (10%)
+    if (totalWeight < 1.0) {
+      const remainingWeight = 1.0 - totalWeight;
+      pro0to10 += schoolsScore * 0.20;
+      pro0to10 += basicsScore * 0.10;
+    }
 
     missionFitScore = Math.round(pro0to10 * 10);
-    
+
     console.log('[pro-recap] Pro mode scoring', {
       isProMode,
       basicReconScore,
@@ -1612,18 +1649,22 @@ async function scorePro(listing: ListingPayload, prefs: UserPrefs): Promise<ProR
       schoolsScore,
       targetsCount: listing.targets?.length || 0,
       mobilitySignals: prefs.mobilitySignals,
-      environmentalSignals: prefs.environmentalSignals
+      environmentalPrefs: prefs.environmentalPrefs,
+      hasTargets,
+      hasMobility,
+      hasEnvironment
     });
   } else {
     // Free mode: Pro score = Free score (no personalization)
     missionFitScore = basicReconScore;
-    
+
     console.log('[pro-recap] Free mode scoring', {
       isProMode,
       basicReconScore,
       missionFitScore,
-      hasPlaceTargets: (prefs.placeTargets?.length ?? 0) > 0,
-      hasMobilitySignals: (prefs.mobilitySignals?.length ?? 0) > 0
+      hasTargets,
+      hasMobility,
+      hasEnvironment
     });
   }
 

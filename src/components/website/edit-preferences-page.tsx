@@ -235,7 +235,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                 Select the environmental factors that matter most to your lifestyle.
               </p>
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-3">
                 {[
                   { key: 'walkScore', label: 'Walkability', description: 'Walk Score®', icon: Footprints },
                   { key: 'bikeScore', label: 'Bikeability', description: 'Bike Score®', icon: Bike },
@@ -250,9 +250,9 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                   return (
                     <label
                       key={item.key}
-                      className={`group flex flex-col items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${
+                      className={`group flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-sm ${
                         isSelected
-                          ? 'border-[#556B2F] bg-[#556B2F]/5 shadow-md'
+                          ? 'border-[#556B2F] bg-[#556B2F]/5'
                           : 'border-gray-200 hover:border-[#556B2F]/30 bg-white'
                       }`}
                     >
@@ -265,30 +265,38 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                         className="sr-only"
                       />
 
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all ${
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        isSelected
+                          ? 'bg-[#556B2F] border-[#556B2F]'
+                          : 'border-gray-300 group-hover:border-[#556B2F]'
+                      }`}>
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
                         isSelected
                           ? 'bg-[#556B2F] text-white'
                           : 'bg-gray-100 text-gray-600 group-hover:bg-[#556B2F]/10 group-hover:text-[#556B2F]'
                       }`}>
-                        <IconComponent className="w-6 h-6" />
+                        <IconComponent className="w-5 h-5" />
                       </div>
 
-                      <div className="text-center">
+                      <div className="flex-1">
                         <span className={`font-medium transition-colors ${
                           isSelected ? 'text-[#556B2F]' : 'text-gray-800'
                         }`}>
                           {item.label}
                         </span>
-                        <p className={`text-xs mt-1 transition-colors ${
+                        <p className={`text-sm mt-0.5 transition-colors ${
                           isSelected ? 'text-[#556B2F]/70' : 'text-gray-500'
                         }`}>
                           {item.description}
                         </p>
                       </div>
-
-                      {isSelected && (
-                        <div className="w-2 h-2 bg-[#556B2F] rounded-full animate-pulse" />
-                      )}
                     </label>
                   );
                 })}

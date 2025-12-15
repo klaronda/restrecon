@@ -274,21 +274,21 @@ export function AccountPortal({
                   </span>
                   <span className={`px-2 py-1 rounded border ${
                     preferences.toggles?.airQuality
-                      ? 'bg-blue-50 border-blue-200 text-blue-700'
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
                       : 'bg-gray-100 border-gray-200'
                   }`}>
                     Air Quality: {preferences.toggles?.airQuality ? 'On' : 'Off'}
                   </span>
                   <span className={`px-2 py-1 rounded border ${
                     preferences.toggles?.soundScore
-                      ? 'bg-purple-50 border-purple-200 text-purple-700'
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
                       : 'bg-gray-100 border-gray-200'
                   }`}>
                     Sound Score: {preferences.toggles?.soundScore ? 'On' : 'Off'}
                   </span>
                   <span className={`px-2 py-1 rounded border ${
                     preferences.toggles?.stargazeScore
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      ? 'bg-[#556B2F]/10 border-[#556B2F]/30 text-[#556B2F]'
                       : 'bg-gray-100 border-gray-200'
                   }`}>
                     Stargaze Score: {preferences.toggles?.stargazeScore ? 'On' : 'Off'}
