@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock } from 'lucide-react';
+import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock, AlertTriangle } from 'lucide-react';
 import { UserPreferences } from '../../services/preferences';
 import { SharedNav } from './shared-nav';
 
@@ -186,6 +186,28 @@ export function AccountPortal({
                   className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
                 >
                   Upgrade Now
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+            )}
+
+            {subscriptionStatus === 'trial_expired' && (
+              <div className="space-y-4">
+                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <p className="text-gray-900">Trial Expired</p>
+                    <span className="text-xs text-red-700 bg-red-100 px-2 py-1 rounded">Plan: Expired</span>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Your free trial has ended. Upgrade to NestRecon Pro to continue enjoying personalized property scoring, AI insights, and environmental data.
+                  </p>
+                </div>
+                <Link
+                  to="/billing"
+                  className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
+                >
+                  Upgrade to Pro
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>

@@ -5,9 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// eslint-disable-next-line no-undef
 const HOWLOUD_API_KEY = Deno.env.get('HOWLOUD_API_KEY');
+// eslint-disable-next-line no-undef
 const OPENWEATHER_API_KEY = Deno.env.get('OPENWEATHER_API_KEY');
+// eslint-disable-next-line no-undef
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+// eslint-disable-next-line no-undef
 const MAPBOX_ACCESS_TOKEN = Deno.env.get('MAPBOX_ACCESS_TOKEN');
 const LPM_BASE = 'https://lightpollutionmap.app/';
 

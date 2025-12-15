@@ -37,12 +37,22 @@ function App() {
   const profileLoadingRef = useRef(false);
   const prefsLoadingRef = useRef(false);
 
-  const normalizePlan = (plan?: string | null): SubscriptionStatus => {
+  const normalizePlan = (plan?: string | null, trialEndsAt?: string | null): SubscriptionStatus => {
     if (!plan) return 'none';
     const planLower = plan.toLowerCase();
     if (planLower === 'pro' || planLower === 'active') return 'active';
-    if (planLower === 'trial') return 'trial';
     if (planLower === 'trial_expired' || planLower === 'trialexpired') return 'trial_expired';
+    if (planLower === 'trial') {
+      // Check if trial has expired
+      if (trialEndsAt) {
+        const trialEndTime = new Date(trialEndsAt).getTime();
+        const now = Date.now();
+        if (trialEndTime <= now) {
+          return 'trial_expired';
+        }
+      }
+      return 'trial';
+    }
     return 'none';
   };
 
@@ -69,7 +79,7 @@ function App() {
     
     setUserName(name);
     setUserEmail(email);
-    setSubscriptionStatus(normalizePlan(profile?.plan));
+    setSubscriptionStatus(normalizePlan(profile?.plan, profile?.trial_ends_at));
     setTrialDaysRemaining(computeTrialDaysRemaining(profile?.trial_ends_at));
     setIsLoggedIn(true);
   };
@@ -157,7 +167,7 @@ function App() {
       profileLoadedRef.current = true;
       profileLoadingRef.current = false;
       
-      return normalizePlan(profile.plan);
+      return normalizePlan(profile.plan, profile.trial_ends_at);
     } catch (err) {
       if (import.meta.env.DEV) console.error('[App] refreshProfile error:', err);
       profileLoadingRef.current = false;

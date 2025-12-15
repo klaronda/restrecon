@@ -15,19 +15,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Chrome storage adapter so sessions persist and are shared with extension
 const chromeStorage =
-  typeof chrome !== 'undefined' && chrome?.storage?.local
+  typeof (globalThis as any).chrome !== 'undefined' && (globalThis as any).chrome?.storage?.local
     ? {
         getItem: (key: string) =>
           new Promise<string | null>((resolve) => {
-            chrome.storage.local.get([key], (res) => resolve((res as any)?.[key] ?? null));
+            (globalThis as any).chrome.storage.local.get([key], (res: any) => resolve(res?.[key] ?? null));
           }),
         setItem: (key: string, value: string) =>
           new Promise<void>((resolve) => {
-            chrome.storage.local.set({ [key]: value }, () => resolve());
+            (globalThis as any).chrome.storage.local.set({ [key]: value }, () => resolve());
           }),
         removeItem: (key: string) =>
           new Promise<void>((resolve) => {
-            chrome.storage.local.remove([key], () => resolve());
+            (globalThis as any).chrome.storage.local.remove([key], () => resolve());
           }),
       }
     : undefined;
