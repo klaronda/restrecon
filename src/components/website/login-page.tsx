@@ -281,7 +281,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 console.log('[login-page] Opened extension callback in new window');
                 // Don't close current window - let user close the callback window manually
                 setIsLoading(false);
-                setSuccess('Authentication successful! Please close this window and return to your extension.');
+                setError(null); // Clear any previous errors
+                // The callback window will handle the success message
                 return;
               } else {
                 console.warn('[login-page] window.open failed, trying direct redirect');

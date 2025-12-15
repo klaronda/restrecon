@@ -18,6 +18,16 @@ export default [
           jsx: true,
         },
       },
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        URLSearchParams: 'readonly',
+        fetch: 'readonly',
+        navigator: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
