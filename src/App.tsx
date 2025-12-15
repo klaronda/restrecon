@@ -75,29 +75,21 @@ function App() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    console.log('[App] handleLogin called', { email: email.substring(0, 3) + '...' });
     const profile = await signInWithProfile(email, password);
-    console.log('[App] signInWithProfile completed', { hasProfile: !!profile });
     if (!profile) {
       throw new Error('Login failed: No profile returned');
     }
 
-    console.log('[App] Applying profile');
     applyProfile(profile, email);
 
     // Refresh to get latest plan status
-    console.log('[App] Refreshing session');
     const { data: sessionData } = await supabase.auth.getSession();
-    console.log('[App] Session data', { hasSession: !!sessionData?.session });
     if (sessionData?.session?.user) {
-      console.log('[App] Fetching fresh profile');
       const freshProfile = await fetchProfile(sessionData.session.user.id);
-      console.log('[App] Fresh profile fetched', { hasFreshProfile: !!freshProfile });
       if (freshProfile) {
         applyProfile(freshProfile, sessionData.session.user.email);
       }
     }
-    console.log('[App] handleLogin completed');
   };
 
   const handleLogout = async () => {

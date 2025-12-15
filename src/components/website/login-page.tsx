@@ -285,9 +285,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       }
       
       // Normal login flow (not extension)
-      console.log('[login-page] Starting normal login flow', { email: email.substring(0, 3) + '...' });
       await onLogin(email, password);
-      console.log('[login-page] Normal login completed, navigating to account');
       navigate('/account');
     } catch (err: any) {
       // Error messages are now user-friendly from auth.ts

@@ -872,38 +872,30 @@ function scoreMobilityFit(mob?: ListingPayload['mobility'], signals?: MobilitySi
  * Scores environment fit for Pro users - only uses environmental factors the user selected.
  * If user checked Air Quality + Sound Score, only those are scored. Stargazing is ignored if not selected.
  */
-function scoreEnvironmentFit(env?: ListingPayload['environment'], signals?: MobilitySignal[]) {
-  // For now, environmental signals are inferred from mobility signals array
-  // In future, this should come from dedicated environmental preferences
-  const envPrefs = new Set<string>();
+function scoreEnvironmentFit(env?: ListingPayload['environment'], signals?: ('airQuality' | 'soundScore' | 'stargazeScore')[]) {
+  // Score environmental factors for Pro users - only uses signals the user selected
+  const scores: number[] = [];
+  const include = new Set(signals || []);
 
-  // Map mobility signals to environmental preferences for now
-  // This is a temporary mapping until we properly separate environmental preferences
-  if (signals?.includes('walk')) envPrefs.add('sound'); // Walkability often correlates with quiet areas
-  // Could add more mappings based on user research
-
-  const sel: number[] = [];
-
-  // Score based on available environmental data and user preferences
-  if (envPrefs.has('sound') && env?.soundScore != null) {
-    // Sound scores: higher is better (more quiet)
-    const soundNormalized = Math.min(env.soundScore / 80, 10); // 80+ dB is very quiet
-    sel.push(soundNormalized);
+  if (include.has('soundScore') && env?.soundScore != null) {
+    // Sound scores: higher is better (more quiet), normalize to 0-10 scale
+    // Sound scores are typically 0-100 where higher is quieter
+    scores.push(Math.min(env.soundScore / 10, 10));
   }
 
-  if (envPrefs.has('air') && env?.airScore != null) {
-    // Air quality scores: convert to 0-10 scale where higher is better air
-    const airNormalized = env.airScore / 10; // Air scores are already 0-100
-    sel.push(airNormalized);
+  if (include.has('airQuality') && env?.airScore != null) {
+    // Air quality scores: already 0-100 scale, convert to 0-10
+    // Higher scores = better air quality
+    scores.push(env.airScore / 10);
   }
 
-  if (envPrefs.has('stargazing') && env?.stargazingScore != null) {
-    // Stargazing scores: already 0-100, convert to 0-10
-    const stargazeNormalized = env.stargazingScore / 10;
-    sel.push(stargazeNormalized);
+  if (include.has('stargazeScore') && env?.stargazingScore != null) {
+    // Stargazing scores: already 0-100 scale, convert to 0-10
+    // Higher scores = better stargazing conditions
+    scores.push(env.stargazingScore / 10);
   }
 
-  return sel.length ? avg(sel) : 5;
+  return scores.length ? avg(scores) : 5; // Default to neutral if no signals or data
 }
 
 /**
@@ -1593,7 +1585,7 @@ async function scorePro(listing: ListingPayload, prefs: UserPrefs): Promise<ProR
     mobilityFitScore = scoreMobilityFit(listing.mobility, prefs.mobilitySignals);
 
     // Calculate environment fit (based on user's environmental preferences)
-    const environmentFitScore = scoreEnvironmentFit(listing.environment, prefs.mobilitySignals);
+    const environmentFitScore = scoreEnvironmentFit(listing.environment, prefs.environmentalSignals);
 
     // Get target scores for debug/display
     if (listing.targets && listing.targets.length > 0) {
