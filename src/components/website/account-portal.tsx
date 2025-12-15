@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Settings, CreditCard, LogOut, Shield, Calendar, ChevronRight, Download, MapPin, Clock, AlertTriangle } from 'lucide-react';
-import { UserPreferences } from '../../services/preferences';
+import { User, Settings, CreditCard, Shield, Calendar, ChevronRight, MapPin, Clock, AlertTriangle } from 'lucide-react';
 import { SharedNav } from './shared-nav';
 
 interface AccountPortalProps {
@@ -11,11 +10,7 @@ interface AccountPortalProps {
   trialDaysRemaining: number;
   onLogout: () => void;
   onManageBilling: () => void;
-  onRefreshStatus?: () => void;
   preferences?: UserPreferences | null;
-  onStartPreferences?: () => void;
-  onProfileUpdated?: () => void;
-  onPreferencesComplete?: (prefs: UserPreferences) => void;
 }
 
 export function AccountPortal({
@@ -25,14 +20,9 @@ export function AccountPortal({
   trialDaysRemaining,
   onLogout,
   onManageBilling,
-  onRefreshStatus,
   preferences,
-  onStartPreferences,
-  onProfileUpdated,
-  onPreferencesComplete,
 }: AccountPortalProps) {
   const isTrialActive = subscriptionStatus === 'trial';
-  const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
 
   const [deviceInfo, setDeviceInfo] = useState<{

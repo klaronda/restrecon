@@ -341,29 +341,15 @@ function App() {
     }, []);
 
     return (
-      <AccountPortal 
-        userName={userName || 'User'}
-        userEmail={userEmail || ''}
-        subscriptionStatus={subscriptionStatus}
-        trialDaysRemaining={trialDaysRemaining}
-        onLogout={handleLogout}
-        onManageBilling={handleManageBilling}
-        onRefreshStatus={async () => {
-          try {
-            return await refreshProfile();
-          } catch {
-            return subscriptionStatus;
-          }
-        }}
-        preferences={preferences}
-        onStartPreferences={() => setShowPrefsWizard(true)}
-        onProfileUpdated={async () => {
-          await refreshProfile();
-        }}
-        onPreferencesComplete={async (prefs) => {
-          await handlePreferencesComplete(prefs);
-        }}
-      />
+        <AccountPortal
+          userName={userName || 'User'}
+          userEmail={userEmail || ''}
+          subscriptionStatus={subscriptionStatus}
+          trialDaysRemaining={trialDaysRemaining}
+          onLogout={handleLogout}
+          onManageBilling={handleManageBilling}
+          preferences={preferences}
+        />
     );
   };
 

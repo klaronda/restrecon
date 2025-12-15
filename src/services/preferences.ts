@@ -22,14 +22,6 @@ export type UserPreferences = {
   updatedAt?: string;
 };
 
-type PreferenceRow = {
-  id: string;
-  user_id: string;
-  preferences_json: UserPreferences;
-  summary_text: string | null;
-  updated_at: string;
-};
-
 export async function fetchPreferences(userId: string, email?: string): Promise<UserPreferences | null> {
   console.log('[fetchPreferences] Starting fetch:', { userId, email, hasEmail: !!email });
   
@@ -163,11 +155,10 @@ export async function savePreferences(userId: string, email: string | null, pref
     recapText: !!recapText
   });
   
-  // Log the preferences structure to debug distance updates
+  // Log the preferences structure
   if (prefs.tags && prefs.tags.length > 0) {
-    console.log('[savePreferences] Tags with distances:', prefs.tags.map(t => ({
-      label: t.label,
-      distanceMiles: t.distanceMiles
+    console.log('[savePreferences] Tags:', prefs.tags.map(t => ({
+      label: t.label
     })));
   }
   
