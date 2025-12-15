@@ -38,6 +38,7 @@ interface UserPrefs {
   mobilitySignals: MobilitySignal[];
   environmentalPrefs?: ('airQuality' | 'soundScore' | 'stargazeScore')[];
   extraFocusNotes?: string;
+  hasSetPreferences?: boolean;
 }
 
 interface ListingPayload {
@@ -1404,6 +1405,11 @@ async function generateAIRecap(
   targetScores: EvaluatedTarget[],
   scores: { basicReconScore: number; missionFitScore: number }
 ): Promise<string> {
+  // Check if user has set up preferences
+  if (!(prefs as any).hasSetPreferences) {
+    return 'You have not set up your mission priorities in your NestRecon account. Please visit your account to configure your property preferences for personalized recommendations.';
+  }
+
   if (!OPENAI_API_KEY) {
     console.warn('[pro-recap] OpenAI: missing API key, using fallback');
     return buildRecapFallback(listing, prefs, targetScores);
@@ -1529,6 +1535,11 @@ You are a friendly, direct real estate advisor. Give a clear recommendation (1-2
 }
 
 function buildRecapFallback(listing: ListingPayload, prefs: UserPrefs, targetScores: EvaluatedTarget[]): string {
+  // Check if user has set up preferences
+  if (!(prefs as any).hasSetPreferences) {
+    return 'You have not set up your mission priorities in your NestRecon account. Please visit your account to configure your property preferences for personalized recommendations.';
+  }
+
   const parts: string[] = [];
   if (listing.address) parts.push(listing.address);
 

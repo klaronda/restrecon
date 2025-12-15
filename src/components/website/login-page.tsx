@@ -238,27 +238,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             isChromeExtensionUrl: finalUrl.startsWith('chrome-extension://')
           });
 
-          // For Chrome extension URLs, try opening in a new window/tab first
-          // If that fails, fall back to direct location change
+          // For Chrome extension URLs, redirect in current tab to callback
+          // The callback page will show the affirmative message and close the tab
           if (finalUrl.startsWith('chrome-extension://')) {
-            console.log('[login-page] Attempting Chrome extension redirect');
+            console.log('[login-page] Redirecting to Chrome extension callback in current tab');
 
-            try {
-              // Try opening in new window (this might work better for extensions)
-              const newWindow = window.open(finalUrl, '_blank');
-              if (newWindow) {
-                console.log('[login-page] Opened extension callback in new window');
-                // Don't close current window - let user close the callback window manually
-                setIsLoading(false);
-                setError(null); // Clear any previous errors
-                // The callback window will handle the success message
-                return;
-              } else {
-                console.warn('[login-page] window.open failed, trying direct redirect');
-              }
-            } catch (windowErr) {
-              console.warn('[login-page] window.open error:', windowErr);
-            }
+            // Clear loading state
+            setIsLoading(false);
+            setError(null); // Clear any previous errors
+
+            // Redirect current tab to callback URL - callback will handle showing message and closing
+            window.location.href = finalUrl;
+            return;
           }
 
           // Fallback: direct location change
