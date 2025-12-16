@@ -78,3 +78,4 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
   AND kcu.column_name = 'user_id';
 
 
+

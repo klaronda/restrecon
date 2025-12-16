@@ -74,33 +74,6 @@ export function AccountPortal({
       {/* Navigation */}
       <SharedNav isLoggedIn={true} onLogout={onLogout} />
 
-      {/* Extension Update Notification */}
-      <div className="bg-gradient-to-r from-[#556B2F] to-[#4a5e28] text-white px-6 py-3 text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-white/20 rounded-full -mr-8 -mt-8"></div>
-          <div className="absolute bottom-0 left-0 w-12 h-12 bg-white/20 rounded-full -ml-6 -mb-6"></div>
-        </div>
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-              🔄
-            </div>
-            <div className="text-left">
-              <div className="font-semibold text-sm">Extension Update Available</div>
-              <div className="text-xs opacity-90">New features and improvements are ready</div>
-            </div>
-          </div>
-          <a
-            href="https://chrome.google.com/webstore/detail/nestrecon"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-white text-[#556B2F] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
-          >
-            Update Now
-          </a>
-        </div>
-      </div>
-
       {/* Header with Rover */}
       <div className="bg-gradient-to-br from-[#556B2F] to-[#4a5e28] py-16 relative overflow-hidden">
         {/* Radar Rings */}
@@ -234,7 +207,6 @@ export function AccountPortal({
                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                   <div className="flex items-center gap-2">
                   <p className="text-gray-900 mb-1">NestRecon Pro</p>
-                    <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">Plan: Pro</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                     <Calendar className="w-4 h-4" />
