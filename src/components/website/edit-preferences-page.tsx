@@ -250,7 +250,7 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                   return (
                     <label
                       key={item.key}
-                      className={`group flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:shadow-sm ${
+                      className={`group flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-sm ${
                         isSelected
                           ? 'border-[#556B2F] bg-[#556B2F]/5'
                           : 'border-gray-200 hover:border-[#556B2F]/30 bg-white'
@@ -265,24 +265,12 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
                         className="sr-only"
                       />
 
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
-                        isSelected
-                          ? 'bg-[#556B2F] border-[#556B2F]'
-                          : 'border-gray-300 group-hover:border-[#556B2F]'
-                      }`}>
-                        {isSelected && (
-                          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-
-                      <div className={`w-8 h-8 rounded-md flex items-center justify-center transition-all flex-shrink-0 ${
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
                         isSelected
                           ? 'bg-[#556B2F] text-white'
                           : 'bg-gray-100 text-gray-600 group-hover:bg-[#556B2F]/10 group-hover:text-[#556B2F]'
                       }`}>
-                        <IconComponent className="w-4 h-4" />
+                        <IconComponent className="w-5 h-5" />
                       </div>
 
                       <div className="flex flex-col">
