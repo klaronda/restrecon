@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the supabase client before importing - must be inline factory
 vi.mock('../../lib/supabaseClient', () => {
-  const { vi } = require('vitest');
   return {
     supabase: {
       auth: {

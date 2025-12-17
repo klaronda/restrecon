@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SharedNav } from './shared-nav';
 
 interface PricingPageProps {

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { SharedNav } from './shared-nav';
 
 interface FAQPageProps {

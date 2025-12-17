@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 
 // Mock the supabase client before importing - must be inline factory
 vi.mock('../../../lib/supabaseClient', () => {
-  const { vi } = require('vitest');
   return {
     supabase: {
       auth: {
