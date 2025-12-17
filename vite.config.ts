@@ -5,9 +5,6 @@
 
 export default defineConfig({
   plugins: [react()],
-  optimizeDeps: {
-    include: ['@supabase/supabase-js'],
-  },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -26,6 +23,7 @@ export default defineConfig({
               '@radix-ui/react-dialog',
               '@radix-ui/react-dropdown-menu',
             ],
+            'supabase-vendor': ['@supabase/supabase-js'],
           },
         },
       },
