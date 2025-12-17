@@ -126,3 +126,4 @@ Then trigger a request from the extension and watch the logs appear.
 
 
 
+
