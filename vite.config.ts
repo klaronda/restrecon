@@ -5,11 +5,14 @@
 
 export default defineConfig({
   plugins: [react()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, './src'),
-      },
+  optimizeDeps: {
+    include: ['react-router', 'react-router-dom'],
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
     },
+  },
     build: {
       target: 'esnext',
       outDir: 'build',
@@ -17,7 +20,7 @@ export default defineConfig({
       rollupOptions: {
         output: {
           manualChunks: {
-            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'react-vendor': ['react', 'react-dom', 'react-router', 'react-router-dom'],
             'radix-vendor': [
               '@radix-ui/react-accordion',
               '@radix-ui/react-dialog',
