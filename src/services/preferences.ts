@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabaseClient';
 
 export type PreferenceTag = {
   label: string;
+  distanceMiles?: number;
 };
 
 export type PreferenceToggles = {

@@ -178,7 +178,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           setError(isDevMode ? `[DEV] ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}` : friendlyMessage);
           setErrorDetails({
             code: errorCode,
-            status: signInError.status,
+            status: signInError.status?.toString(),
             original: isDevMode ? signInError : undefined
           });
           setIsLoading(false);
