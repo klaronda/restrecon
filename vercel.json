@@ -36,6 +36,26 @@
   ],
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/api/health.ts"
+    },
+    {
+      "source": "/api/health/cms",
+      "destination": "/api/health/cms.ts"
+    },
+    {
+      "source": "/api/health/form-test",
+      "destination": "/api/health/form-test.ts"
+    },
+    {
+      "source": "/api/health/log",
+      "destination": "/api/health/log.ts"
+    },
+    {
+      "source": "/api/health/deploy",
+      "destination": "/api/health/deploy.ts"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
@@ -70,11 +90,51 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/api/health",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/api/health/cms",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/api/health/form-test",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/api/health/log",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/api/health/deploy",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }
-
-
-
-
-
