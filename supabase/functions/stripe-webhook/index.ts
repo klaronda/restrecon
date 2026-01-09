@@ -59,16 +59,48 @@ serve(async (req) => {
         session.customer_email ??
         null;
 
+      console.log("checkout.session.completed received", {
+        sessionId: session.id,
+        email,
+        paymentStatus: session.payment_status,
+        customerDetails: session.customer_details,
+        subscription: session.subscription,
+      });
+
       if (email) {
         try {
-          await updateUserPlanByEmail(email, "pro", null);
-          console.log("checkout.completed → plan=pro", { email });
+          // Get subscription renewal date if subscription exists
+          let renewsAt: string | null = null;
+          if (session.subscription && typeof session.subscription === "string") {
+            const subscription = await stripe.subscriptions.retrieve(session.subscription);
+            renewsAt = new Date(subscription.current_period_end * 1000).toISOString();
+          } else if (session.subscription && typeof session.subscription === "object") {
+            const sub = session.subscription as Stripe.Subscription;
+            renewsAt = new Date(sub.current_period_end * 1000).toISOString();
+          }
+
+          const updated = await updateUserPlanByEmail(email, "pro", null, renewsAt);
+          console.log("checkout.completed → plan=pro", { 
+            email, 
+            updatedRows: updated?.length || 0,
+            renewsAt 
+          });
         } catch (error) {
-          console.error("Failed to update user plan (checkout)", error);
-          return new Response("Update failed", { status: 500 });
+          console.error("Failed to update user plan (checkout)", {
+            email,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return new Response(JSON.stringify({ error: "Update failed", email }), { 
+            status: 500,
+            headers: { "Content-Type": "application/json" }
+          });
         }
       } else {
-        console.warn("No email on checkout.session; cannot map user.");
+        console.warn("No email on checkout.session; cannot map user.", {
+          sessionId: session.id,
+          customerDetails: session.customer_details,
+          customerEmail: session.customer_email,
+        });
       }
       break;
     }
@@ -86,15 +118,16 @@ serve(async (req) => {
       // Map Stripe status to plan
       if (status === "active" || status === "trialing") {
         try {
-          await updateUserPlanByEmail(email, "pro", null);
-          console.log("subscription.updated → plan=pro", { email, status });
+          const renewsAt = new Date(sub.current_period_end * 1000).toISOString();
+          await updateUserPlanByEmail(email, "pro", null, renewsAt);
+          console.log("subscription.updated → plan=pro", { email, status, renewsAt });
         } catch (error) {
           console.error("Failed to update user plan (subscription.updated)", error);
           return new Response("Update failed", { status: 500 });
         }
       } else if (status === "past_due" || status === "unpaid" || status === "canceled" || status === "incomplete_expired") {
         try {
-          await updateUserPlanByEmail(email, "trial_expired", new Date().toISOString());
+          await updateUserPlanByEmail(email, "trial_expired", new Date().toISOString(), null);
           console.log("subscription.updated → plan=trial_expired", { email, status });
         } catch (error) {
           console.error("Failed to downgrade user (subscription.updated)", error);
@@ -129,16 +162,46 @@ serve(async (req) => {
   return new Response("ok", { status: 200 });
 });
 
-async function updateUserPlanByEmail(email: string, plan: string, trialEndsAt: string | null) {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      plan,
-      trial_ends_at: trialEndsAt,
-    })
-    .eq("email", email);
+async function updateUserPlanByEmail(
+  email: string, 
+  plan: string, 
+  trialEndsAt: string | null,
+  subscriptionRenewsAt: string | null = null
+) {
+  const updateData: {
+    plan: string;
+    trial_ends_at: string | null;
+    subscription_renews_at?: string | null;
+  } = {
+    plan,
+    trial_ends_at: trialEndsAt,
+  };
 
-  if (error) throw error;
+  if (subscriptionRenewsAt !== undefined) {
+    updateData.subscription_renews_at = subscriptionRenewsAt;
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .update(updateData)
+    .eq("email", email)
+    .select();
+
+  if (error) {
+    console.error("Database update error:", error);
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    console.warn(`No user found with email: ${email}`);
+    throw new Error(`No user found with email: ${email}`);
+  }
+
+  console.log(`Successfully updated user plan: ${email} → ${plan}`, { 
+    rowsUpdated: data.length,
+    subscriptionRenewsAt 
+  });
+  return data;
 }
 
 async function extractEmailFromSubscription(sub: Stripe.Subscription): Promise<string | null> {

@@ -9,6 +9,7 @@ interface AccountPortalProps {
   userEmail: string;
   subscriptionStatus: 'none' | 'trial' | 'trial_expired' | 'active' | 'cancelled';
   trialDaysRemaining: number;
+  subscriptionRenewsAt?: string | null;
   onLogout: () => void;
   onManageBilling: () => void;
   preferences?: UserPreferences | null;
@@ -23,6 +24,7 @@ export function AccountPortal({
   userEmail,
   subscriptionStatus,
   trialDaysRemaining,
+  subscriptionRenewsAt,
   onLogout,
   onManageBilling,
   preferences,
@@ -304,7 +306,11 @@ export function AccountPortal({
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                     <Calendar className="w-4 h-4" />
-                    <span>Renews on January 15, 2026</span>
+                    <span>
+                      {subscriptionRenewsAt 
+                        ? `Renews on ${new Date(subscriptionRenewsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                        : 'Renewal date not available'}
+                    </span>
                   </div>
                   <p className="text-sm text-gray-600">Monthly billing at $9/month</p>
                 </div>

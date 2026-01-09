@@ -28,6 +28,7 @@ function App() {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [trialDaysRemaining, setTrialDaysRemaining] = useState(0);
+  const [subscriptionRenewsAt, setSubscriptionRenewsAt] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [showPrefsWizard, setShowPrefsWizard] = useState(false);
@@ -69,6 +70,7 @@ function App() {
     setUserName('');
     setUserEmail('');
     setTrialDaysRemaining(0);
+    setSubscriptionRenewsAt(null);
   };
 
   const applyProfile = (profile: AuthProfile | null, emailFromSession?: string | null) => {
@@ -81,6 +83,7 @@ function App() {
     setUserEmail(email);
     setSubscriptionStatus(normalizePlan(profile?.plan, profile?.trial_ends_at));
     setTrialDaysRemaining(computeTrialDaysRemaining(profile?.trial_ends_at));
+    setSubscriptionRenewsAt(profile?.subscription_renews_at || null);
     setIsLoggedIn(true);
   };
 
@@ -346,6 +349,7 @@ function App() {
           userEmail={userEmail || ''}
           subscriptionStatus={subscriptionStatus}
           trialDaysRemaining={trialDaysRemaining}
+          subscriptionRenewsAt={subscriptionRenewsAt}
           onLogout={handleLogout}
           onManageBilling={handleManageBilling}
           preferences={preferences}
