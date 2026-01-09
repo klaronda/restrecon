@@ -14,11 +14,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [errorDetails, setErrorDetails] = useState<{ code?: string; status?: string; original?: any } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
-  
-  const isDevMode = import.meta.env.DEV;
 
   // Check if this is an extension login
   const isExtension = searchParams.get('extension') === 'true';
@@ -32,17 +29,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     
     const checkExistingSession = async () => {
       try {
-        console.log('[login-page] Starting session check', {
-          isExtension,
-          hasRedirectUrl: !!redirectUrl,
-          hasStateToken: !!stateToken,
-          supabaseInitialized: !!supabase
-        });
-
         // Add timeout fallback to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.warn('[login-page] Session check timeout (3s), showing login form');
             setCheckingSession(false);
           }
         }, 3000); // Increased to 3s for better reliability
@@ -53,18 +42,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           setTimeout(() => reject(new Error('Session check timeout')), 3000)
         );
 
-        console.log('[login-page] Racing session check with timeout');
-
         let sessionResult;
         try {
           sessionResult = await Promise.race([sessionPromise, timeoutPromise]);
-          console.log('[login-page] Session check completed', {
-            hasSession: !!(sessionResult as any)?.data?.session,
-            hasError: !!(sessionResult as any)?.error
-          });
-        } catch (raceErr) {
+        } catch {
           // Timeout won the race
-          console.warn('[login-page] Session check timed out, showing login form', raceErr);
           if (isMounted) {
             setCheckingSession(false);
           }
@@ -85,11 +67,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           if (isExtension && redirectUrl) {
             // EXTENSION FLOW: Even if already logged in, show the login form
             // This allows the extension to get its own session/authentication
-            console.log('[login-page] User already logged in, but showing login form for extension auth');
             setCheckingSession(false);
           } else {
             // NORMAL FLOW: User is already logged in, redirect to account
-            console.log('[login-page] User already logged in, redirecting to account');
             navigate('/account');
             return;
           }
@@ -98,7 +78,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           setCheckingSession(false);
         }
       } catch (err) {
-        console.error('[login-page] Error checking session:', err);
+        if (import.meta.env.DEV) {
+          console.error('[login-page] Error checking session:', err);
+        }
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -121,40 +103,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setErrorDetails(null);
     if (!email || !password) return;
     try {
       setIsLoading(true);
       
       // If extension login, sign in directly to get session immediately
       if (isExtension && redirectUrl) {
-        console.log('[login-page] Starting extension login flow', {
-          email: email.substring(0, 3) + '...',
-          hasRedirectUrl: !!redirectUrl,
-          redirectUrl: redirectUrl.substring(0, 50) + '...'
-        });
-
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-
-        console.log('[login-page] Extension login result', {
-          hasData: !!signInData,
-          hasSession: !!signInData?.session,
-          hasError: !!signInError,
-          errorMessage: signInError?.message?.substring(0, 50)
-        });
         
         if (signInError) {
-          // Log detailed error for extension login
-          console.error('[login-page] Extension login error:', {
-            errorMessage: signInError.message,
-            errorCode: signInError.code,
-            errorStatus: signInError.status,
-            fullError: isDevMode ? signInError : undefined
-          });
-          
           // Use the same error message mapping as normal login
           const errorCode = signInError.code || '';
           const errorMessage = signInError.message || '';
@@ -175,12 +135,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             friendlyMessage = 'No account found with this email address. Please sign up instead.';
           }
           
-          setError(isDevMode ? `[DEV] ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}` : friendlyMessage);
-          setErrorDetails({
-            code: errorCode,
-            status: signInError.status?.toString(),
-            original: isDevMode ? signInError : undefined
-          });
+          setError(friendlyMessage);
           setIsLoading(false);
           return;
         }
@@ -196,19 +151,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         // Also call onLogin to update app state
         try {
           await onLogin(email, password);
-        } catch (err) {
+        } catch {
           // Ignore errors from onLogin - we already have the session
-          console.warn('[login-page] onLogin had error but continuing with extension redirect:', err);
         }
-        
-        // Redirect to extension callback with tokens
-        console.log('[login-page] Redirecting to extension callback', { 
-          hasAccessToken: !!session.access_token,
-          hasRefreshToken: !!session.refresh_token,
-          accessTokenLength: session.access_token?.length || 0,
-          refreshTokenLength: session.refresh_token?.length || 0,
-          redirectUrl 
-        });
         
         try {
           // Manually construct URL for chrome-extension:// protocol
@@ -229,20 +174,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             finalUrl += `#${hashString}`;
           }
 
-          console.log('[login-page] Final callback URL', {
-            finalUrl: finalUrl.substring(0, 150) + '...',
-            urlLength: finalUrl.length,
-            hasAccessToken: hashParams.has('access_token'),
-            hasRefreshToken: hashParams.has('refresh_token'),
-            hasState: hashParams.has('state'),
-            isChromeExtensionUrl: finalUrl.startsWith('chrome-extension://')
-          });
-
           // For Chrome extension URLs, redirect in current tab to callback
           // The callback page will show the affirmative message and close the tab
           if (finalUrl.startsWith('chrome-extension://')) {
-            console.log('[login-page] Redirecting to Chrome extension callback in current tab');
-
             // Clear loading state
             setIsLoading(false);
             setError(null); // Clear any previous errors
@@ -252,23 +186,21 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             return;
           }
 
-          // Fallback: direct location change
-          console.log('[login-page] Using direct location redirect');
-
           // Add a fallback timeout in case redirect fails
           const redirectTimeout = setTimeout(() => {
-            console.error('[login-page] Redirect timeout - redirect may have failed');
             setError('Redirect to extension failed. Please try refreshing the extension popup.');
             setIsLoading(false);
-          }, 5000); // Increased timeout for extension redirects
+          }, 5000);
 
           // Attempt redirect
           window.location.href = finalUrl;
 
           // Clear timeout if redirect starts (this won't execute if redirect succeeds)
           setTimeout(() => clearTimeout(redirectTimeout), 100);
-        } catch (urlErr) {
-          console.error('[login-page] Error constructing callback URL:', urlErr);
+        } catch (urlErr: any) {
+          if (import.meta.env.DEV) {
+            console.error('[login-page] Error constructing callback URL:', urlErr);
+          }
           setError('Failed to construct callback URL. Please try again.');
           setIsLoading(false);
         }
@@ -282,23 +214,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       // Error messages are now user-friendly from auth.ts
       const errorMessage = err?.message || 'Login failed. Please check your credentials and try again.';
       setError(errorMessage);
-      
-      // Store error details for debugging
-      setErrorDetails({
-        code: err?.errorCode || err?.code,
-        status: err?.status || err?.errorStatus,
-        original: isDevMode ? err?.originalError : undefined
-      });
-      
-      // Log full error details for debugging
-      console.error('[login-page] Login error:', {
-        message: errorMessage,
-        errorCode: err?.errorCode || err?.code,
-        errorStatus: err?.status || err?.errorStatus,
-        errorType: err?.errorType,
-        originalError: err?.originalError,
-        fullError: err
-      });
     } finally {
       setIsLoading(false);
     }
@@ -404,24 +319,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               {isLoading ? 'Signing in...' : 'Enter Mission Control'}
             </button>
             {error && (
-              <div className="space-y-2">
-                <p className="text-sm text-red-600 text-center">{error}</p>
-                {isDevMode && errorDetails && (
-                  <div className="text-xs text-gray-500 text-center space-y-1 p-2 bg-gray-50 rounded border border-gray-200">
-                    <p><strong>Debug Info:</strong></p>
-                    {errorDetails.code && <p>Error Code: {errorDetails.code}</p>}
-                    {errorDetails.status && <p>Status: {errorDetails.status}</p>}
-                    {errorDetails.original && (
-                      <details className="mt-2 text-left">
-                        <summary className="cursor-pointer text-gray-600 hover:text-gray-800">Show original error</summary>
-                        <pre className="mt-1 text-xs overflow-auto max-h-32 p-2 bg-gray-100 rounded">
-                          {JSON.stringify(errorDetails.original, null, 2)}
-                        </pre>
-                      </details>
-                    )}
-                  </div>
-                )}
-              </div>
+              <p className="text-sm text-red-600 text-center">{error}</p>
             )}
           </form>
 

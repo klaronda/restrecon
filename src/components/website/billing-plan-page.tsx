@@ -22,7 +22,9 @@ export function BillingPlanPage({ currentPlan, onUpgrade }: BillingPlanPageProps
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to open checkout.';
       setError(message);
-      console.error(err);
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
     } finally {
       setIsProcessing(false);
     }

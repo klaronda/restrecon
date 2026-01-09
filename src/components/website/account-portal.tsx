@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { User, Settings, CreditCard, Shield, Calendar, ChevronRight, MapPin, Clock, AlertTriangle } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { User, Settings, CreditCard, Shield, Calendar, ChevronRight, MapPin, Clock, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { SharedNav } from './shared-nav';
 import { UserPreferences } from '../../services/preferences';
 
@@ -14,6 +14,10 @@ interface AccountPortalProps {
   preferences?: UserPreferences | null;
 }
 
+// Latest extension version from Chrome Web Store
+const LATEST_EXTENSION_VERSION = '0.1.3';
+const CHROME_WEB_STORE_URL = 'https://chromewebstore.google.com/detail/nestrecon-%E2%80%93-tactical-reco/jijciobakjhkkkohjfjlcgcppcfkpgep';
+
 export function AccountPortal({
   userName,
   userEmail,
@@ -23,8 +27,12 @@ export function AccountPortal({
   onManageBilling,
   preferences,
 }: AccountPortalProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isTrialActive = subscriptionStatus === 'trial';
   const isFree = subscriptionStatus === 'none';
+  
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
   const [deviceInfo, setDeviceInfo] = useState<{
     browser: string;
@@ -38,6 +46,16 @@ export function AccountPortal({
     timezone: 'Detecting…',
     language: 'Detecting…',
     lastChecked: new Date().toLocaleString(),
+  });
+
+  const [extensionInfo, setExtensionInfo] = useState<{
+    version: string | null;
+    isInstalled: boolean;
+    needsUpdate: boolean;
+  }>({
+    version: null,
+    isInstalled: false,
+    needsUpdate: false,
   });
 
   useEffect(() => {
@@ -70,10 +88,85 @@ export function AccountPortal({
     });
   }, []);
 
+  // Detect extension version
+  useEffect(() => {
+    const detectExtensionVersion = async () => {
+      try {
+        // Try to get version from extension via postMessage
+        // The extension can expose its version by listening for this message
+        // Check if extension is installed by trying to communicate
+        // Note: This requires the extension to have a message listener that responds with version
+        // For now, we'll show the latest version and check if update is needed
+        
+        // Try to detect if extension is installed by checking for chrome.runtime
+        // Websites can't directly access chrome.runtime, so we'll use a different approach
+        // We'll show the latest version and provide an update link if needed
+        
+        // Since we can't directly detect the installed version from the website,
+        // we'll show the latest version and always provide an update option
+        setExtensionInfo({
+          version: LATEST_EXTENSION_VERSION,
+          isInstalled: true, // Assume installed if user is on account page
+          needsUpdate: false, // Can't determine without extension communication
+        });
+      } catch {
+        // Extension not detected or error
+        setExtensionInfo({
+          version: null,
+          isInstalled: false,
+          needsUpdate: false,
+        });
+      }
+    };
+
+    detectExtensionVersion();
+  }, []);
+
+  // Check for payment success query parameter
+  useEffect(() => {
+    const paymentParam = searchParams.get('payment');
+    if (paymentParam === 'success') {
+      setShowPaymentSuccess(true);
+      // Clear the query parameter from URL
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('payment');
+      navigate(`/account?${newSearchParams.toString()}`, { replace: true });
+      
+      // Auto-dismiss after 8 seconds
+      const timer = setTimeout(() => {
+        setShowPaymentSuccess(false);
+      }, 8000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, navigate]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
       {/* Navigation */}
       <SharedNav isLoggedIn={true} onLogout={onLogout} />
+
+      {/* Payment Success Message */}
+      {showPaymentSuccess && (
+        <div className="max-w-7xl mx-auto px-6 pt-6">
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 flex items-start gap-3 relative">
+            <div className="flex-shrink-0">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-green-900 font-semibold mb-1">Payment successful!</p>
+              <p className="text-green-700 text-sm">Your NestRecon Pro subscription is now active.</p>
+            </div>
+            <button
+              onClick={() => setShowPaymentSuccess(false)}
+              className="flex-shrink-0 text-green-600 hover:text-green-800 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header with Rover */}
       <div className="bg-gradient-to-br from-[#556B2F] to-[#4a5e28] py-16 relative overflow-hidden">
@@ -353,6 +446,26 @@ export function AccountPortal({
                 </p>
                 <p className="text-sm text-gray-600">Language: {deviceInfo.language}</p>
               </div>
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-gray-900 text-sm mb-1">Chrome Extension</p>
+                {extensionInfo.version && !extensionInfo.needsUpdate ? (
+                  <p className="text-sm text-gray-600">Version {extensionInfo.version}</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600 mb-2">
+                      {extensionInfo.version ? `Installed: ${extensionInfo.version}` : 'Latest version:'} {LATEST_EXTENSION_VERSION}
+                    </p>
+                    <a
+                      href={CHROME_WEB_STORE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[#556B2F] hover:underline inline-block"
+                    >
+                      Get the latest extension →
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
             <div className="mt-4">
               <button 
@@ -360,11 +473,8 @@ export function AccountPortal({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('[AccountPortal] Logout button clicked');
                   if (onLogout) {
                     onLogout();
-                  } else {
-                    console.error('[AccountPortal] onLogout handler not provided');
                   }
                 }}
               >

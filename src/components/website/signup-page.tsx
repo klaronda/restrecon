@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface SignUpPageProps {
@@ -7,7 +7,6 @@ interface SignUpPageProps {
 }
 
 export function SignUpPage({ onSignUp }: SignUpPageProps) {
-  const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -31,7 +30,9 @@ export function SignUpPage({ onSignUp }: SignUpPageProps) {
       // Error messages are now user-friendly from auth.ts
       const errorMessage = err?.message || 'Sign up failed. Please try again.';
       setError(errorMessage);
-      console.error('[signup-page] Sign up error:', err);
+      if (import.meta.env.DEV) {
+        console.error('[signup-page] Sign up error:', err);
+      }
     } finally {
       setIsLoading(false);
     }

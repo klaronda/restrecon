@@ -84,11 +84,8 @@ export function SharedNav({ isLoggedIn = false, onLogout }: SharedNavProps) {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('[SharedNav] Logout button clicked');
                     if (onLogout) {
                       onLogout();
-                    } else {
-                      console.error('[SharedNav] onLogout handler not provided');
                     }
                   }}
                   className="text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors"

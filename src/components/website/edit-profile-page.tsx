@@ -77,7 +77,9 @@ export function EditProfilePage({ onLogout, currentPreferences, onPreferencesUpd
           await onPreferencesUpdated(currentPreferences);
         } catch (recapError) {
           // Don't fail the profile update if recap regeneration fails
-          console.warn('[EditProfilePage] Recap regeneration failed:', recapError);
+          if (import.meta.env.DEV) {
+            console.warn('[EditProfilePage] Recap regeneration failed:', recapError);
+          }
         }
       }
 

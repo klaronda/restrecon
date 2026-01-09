@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { SharedNav } from './shared-nav';
 
@@ -6,6 +7,10 @@ interface PrivacyPolicyPageProps {
 }
 
 export function PrivacyPolicyPage({ isLoggedIn = false }: PrivacyPolicyPageProps) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-[#D6C9A2]/10">
       {/* Navigation */}

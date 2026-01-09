@@ -542,12 +542,14 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
             {/* Install */}
             <div>
               <h4 className="mb-4">Get Started</h4>
-              <Link 
-                to="/signup"
+              <a 
+                href="https://chromewebstore.google.com/detail/nestrecon-%E2%80%93-tactical-reco/jijciobakjhkkkohjfjlcgcppcfkpgep"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-block bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] text-sm"
               >
                 Install Extension
-              </Link>
+              </a>
             </div>
           </div>
 

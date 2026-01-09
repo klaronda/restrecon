@@ -67,7 +67,9 @@ export function EditPreferencesPage({ userName, initialPreferences, onComplete, 
       await onComplete(prefs);
       navigate('/account');
     } catch (err) {
-      console.error('[EditPreferencesPage] Error saving preferences:', err);
+      if (import.meta.env.DEV) {
+        console.error('[EditPreferencesPage] Error saving preferences:', err);
+      }
     } finally {
       setIsSaving(false);
     }

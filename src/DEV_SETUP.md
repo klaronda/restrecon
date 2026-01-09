@@ -22,10 +22,9 @@ npm run dev
 ### Stripe links for Upgrade/Portal buttons
 Add these to your `.env` and restart `npm run dev` so the Upgrade and Manage Billing buttons open real Stripe pages:
 ```
-VITE_STRIPE_PAYMENT_LINK=<payment link for checkout>
-VITE_STRIPE_PAYMENT_LINK_MONTHLY=<optional override>
-VITE_STRIPE_PAYMENT_LINK_YEARLY=<optional override>
-VITE_STRIPE_PORTAL_URL=<customer portal link>
+VITE_STRIPE_PAYMENT_LINK_MONTHLY=https://buy.stripe.com/eVqaEQ9Ra9mV4zc5bhg3601
+VITE_STRIPE_PAYMENT_LINK_YEARLY=https://buy.stripe.com/28EfZa0gA56F3v8avBg3600
+VITE_STRIPE_PORTAL_URL=<customer portal link - optional>
 ```
 
 ### Stripe → Supabase plan sync (Edge Function)
@@ -36,7 +35,7 @@ STRIPE_WEBHOOK_SECRET=<signing secret for this webhook>
 SUPABASE_URL=<your supabase url>
 SUPABASE_SERVICE_ROLE_KEY=<service role key>
 ```
-In Stripe, set the Payment Link “After payment” redirect to your app (e.g., https://yourdomain.com/account). On `checkout.session.completed`, the webhook sets `users.plan='pro'` (matched by checkout email) and clears `trial_ends_at`.
+In Stripe, set the Payment Link "After payment" redirect to your app (e.g., https://nestrecon.com/account?payment=success). On `checkout.session.completed`, the webhook sets `users.plan='pro'` (matched by checkout email) and clears `trial_ends_at`. The success query parameter triggers a payment success message on the account page.
 
 ---
 
