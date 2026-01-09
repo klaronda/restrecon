@@ -8,6 +8,7 @@ export type AuthProfile = {
   email?: string | null;
   plan?: PlanType | null;
   trial_ends_at?: string | null;
+  subscription_renews_at?: string | null;
 };
 
 type SignUpPayload = {
@@ -134,7 +135,7 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
   // Step 1: Try by auth_user_id
   const { data, error } = await supabase
     .from('users')
-    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+    .select('id, first_name, last_name, email, plan, trial_ends_at, subscription_renews_at, auth_user_id')
     .eq('auth_user_id', userId)
     .maybeSingle();
 
@@ -148,7 +149,7 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
   if (email) {
     const { data: emailData } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+      .select('id, first_name, last_name, email, plan, trial_ends_at, subscription_renews_at, auth_user_id')
       .eq('email', email)
       .maybeSingle();
 
@@ -172,7 +173,7 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
       plan: 'trial',
       trial_ends_at: trialEndsAt,
     }, { onConflict: 'auth_user_id' })
-    .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+    .select('id, first_name, last_name, email, plan, trial_ends_at, subscription_renews_at, auth_user_id')
     .maybeSingle();
 
   if (created) return created;
@@ -181,7 +182,7 @@ export async function ensureUserProfile(userId: string, email?: string | null): 
   if (createError?.code === '23505') {
     const { data: retry } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, plan, trial_ends_at, auth_user_id')
+      .select('id, first_name, last_name, email, plan, trial_ends_at, subscription_renews_at, auth_user_id')
       .eq('email', email ?? '')
       .maybeSingle();
     
@@ -231,7 +232,7 @@ export async function signInWithProfile(email: string, password: string): Promis
 export async function fetchProfile(userId: string): Promise<AuthProfile | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('first_name, last_name, email, plan, trial_ends_at')
+    .select('first_name, last_name, email, plan, trial_ends_at, subscription_renews_at')
     .eq('auth_user_id', userId)
     .maybeSingle();
     
