@@ -335,12 +335,14 @@ export function LandingPage({ isLoggedIn = false, onLogout }: LandingPageProps) 
                 </li>
               </ul>
 
-              <Link 
-                  to={isLoggedIn ? "/account" : "/signup"}
-                className="block w-full text-center border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:border-gray-400 transition-colors"
+              <a 
+                  href={isLoggedIn ? "/account" : "https://chromewebstore.google.com/detail/jijciobakjhkkkohjfjlcgcppcfkpgep"}
+                  target={isLoggedIn ? undefined : "_blank"}
+                  rel={isLoggedIn ? undefined : "noopener noreferrer"}
+                  className="block w-full text-center border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:border-gray-400 transition-colors"
               >
                   {isLoggedIn ? 'Open Mission Control' : 'Get Started Free'}
-              </Link>
+              </a>
             </div>
 
             {/* Pro Plan */}
