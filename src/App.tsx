@@ -19,6 +19,7 @@ import { fetchPreferences, savePreferences, generateRecap, UserPreferences } fro
 import { OnboardingChat } from './components/onboarding-chat';
 import { EditProfilePage } from './components/website/edit-profile-page';
 import { EditPreferencesPage } from './components/website/edit-preferences-page';
+import { SavedPropertiesPage } from './components/website/saved-properties-page';
 
 type SubscriptionStatus = 'none' | 'trial' | 'trial_expired' | 'active' | 'cancelled';
 
@@ -662,6 +663,19 @@ function App() {
                 userName={userName || 'User'}
                 initialPreferences={preferences}
                 onComplete={handlePreferencesComplete}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/saved-properties"
+          element={
+            isLoggedIn ? (
+              <SavedPropertiesPage
+                userName={userName || 'User'}
                 onLogout={handleLogout}
               />
             ) : (

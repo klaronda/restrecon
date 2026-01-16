@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { User, Settings, CreditCard, Shield, Calendar, ChevronRight, MapPin, Clock, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { User, Settings, CreditCard, Shield, Calendar, ChevronRight, MapPin, Clock, AlertTriangle, CheckCircle, X, Heart, ExternalLink } from 'lucide-react';
 import { SharedNav } from './shared-nav';
 import { UserPreferences } from '../../services/preferences';
+import { fetchSavedProperties, SavedProperty } from '../../services/saved-properties';
+import { supabase } from '../../lib/supabaseClient';
 
 interface AccountPortalProps {
   userName: string;
@@ -59,6 +61,9 @@ export function AccountPortal({
     isInstalled: false,
     needsUpdate: false,
   });
+
+  const [savedProperties, setSavedProperties] = useState<SavedProperty[]>([]);
+  const [savedPropertiesLoading, setSavedPropertiesLoading] = useState(true);
 
   useEffect(() => {
     const ua = navigator.userAgent || '';
@@ -122,6 +127,30 @@ export function AccountPortal({
     };
 
     detectExtensionVersion();
+  }, []);
+
+  // Fetch saved properties
+  useEffect(() => {
+    const loadSavedProperties = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) {
+          setSavedPropertiesLoading(false);
+          return;
+        }
+
+        const properties = await fetchSavedProperties(sessionData.session.user.id, 5);
+        setSavedProperties(properties);
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error('[AccountPortal] Error loading saved properties:', err);
+        }
+      } finally {
+        setSavedPropertiesLoading(false);
+      }
+    };
+
+    loadSavedProperties();
   }, []);
 
   // Check for payment success query parameter
@@ -326,7 +355,7 @@ export function AccountPortal({
           </div>
 
           {/* Preference Summary */}
-          <div className="bg-white rounded-xl border-2 border-gray-200 p-6 md:col-span-2">
+          <div className="bg-white rounded-xl border-2 border-gray-200 p-6 md:col-span-1">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-[#1C2A40]/10 rounded-lg flex items-center justify-center">
                 <Settings className="w-5 h-5 text-[#1C2A40]" />
@@ -408,7 +437,7 @@ export function AccountPortal({
                   to="/edit-preferences"
                   className="inline-flex items-center gap-2 text-[#556B2F] hover:underline text-sm"
                 >
-                  Edit preferences
+                  Edit Preferences
                   <ChevronRight className="w-4 h-4" />
                 </Link>
             </div>
@@ -420,6 +449,78 @@ export function AccountPortal({
                   className="inline-flex items-center gap-2 bg-[#556B2F] text-white px-4 py-2 rounded-lg hover:bg-[#4a5e28] transition-colors"
                 >
                   Calibrate preferences
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Saved Properties */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 p-6 md:col-span-1">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)' }}>
+                <Heart className="w-5 h-5 text-red-600 fill-red-600" />
+              </div>
+              <h2 className="text-gray-900">Saved Properties</h2>
+            </div>
+
+            {savedPropertiesLoading ? (
+              <div className="text-gray-500 text-sm">Loading...</div>
+            ) : savedProperties.length === 0 ? (
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-gray-600 text-sm mb-2">No saved properties yet.</p>
+                <p className="text-gray-500 text-xs">
+                  Save properties from the Chrome extension to see them here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {savedProperties.map((property) => {
+                  // Extension badge colors
+                  const getBadgeStyle = (label: string | null) => {
+                    if (!label) return { backgroundColor: '#f3f4f6', color: '#6b7280' };
+                    if (label.includes('Great')) return { backgroundColor: '#dfe9c7', color: '#2f3c20' };
+                    if (label.includes('Fair')) return { backgroundColor: '#e9f1d8', color: '#3f4f24' };
+                    if (label.includes('Poor')) return { backgroundColor: '#fde7c3', color: '#8a5b00' };
+                    if (label.includes('Not a Match')) return { backgroundColor: '#fbd2d2', color: '#9f1d1d' };
+                    return { backgroundColor: '#f3f4f6', color: '#6b7280' };
+                  };
+
+                  return (
+                    <div
+                      key={property.id}
+                      className="border border-gray-200 rounded-lg p-3 hover:border-[#556B2F]/40 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-gray-900 font-medium text-sm truncate flex-1" title={property.address}>
+                          {property.address}
+                        </p>
+                        {property.matchLabel && (
+                          <span
+                            className="text-xs font-bold rounded-full px-3 py-1 whitespace-nowrap"
+                            style={getBadgeStyle(property.matchLabel)}
+                          >
+                            {property.matchLabel}
+                          </span>
+                        )}
+                      </div>
+                      <a
+                        href={property.zillowUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#556B2F] hover:underline"
+                      >
+                        View on Zillow
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  );
+                })}
+                <Link
+                  to="/saved-properties"
+                  className="inline-flex items-center gap-2 text-sm text-[#556B2F] hover:underline mt-2"
+                >
+                  View All
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -484,7 +585,7 @@ export function AccountPortal({
                   }
                 }}
               >
-                Log out everywhere
+                Log Out Everywhere
               </button>
             </div>
           </div>
