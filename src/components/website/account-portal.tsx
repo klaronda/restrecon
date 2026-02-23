@@ -170,6 +170,7 @@ export function AccountPortal({
       
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [searchParams, navigate]);
 
   return (
