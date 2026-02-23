@@ -1420,6 +1420,34 @@ async function generateAIRecap(
   }
 
   try {
+    // Log listing basics for debugging hallucination issues
+    console.log('[pro-recap] generateAIRecap: listing basics', {
+      address: listing.address,
+      beds: listing.basics?.beds,
+      baths: listing.basics?.baths,
+      sqft: listing.basics?.sqft,
+      year: listing.basics?.year,
+      hasBasics: !!listing.basics,
+    });
+
+    // Build property details string - ALWAYS include what we know, explicitly mark unknowns
+    const propertyDetails: string[] = [];
+    if (listing.basics?.beds != null) {
+      propertyDetails.push(`${listing.basics.beds} bed`);
+    }
+    if (listing.basics?.baths != null) {
+      propertyDetails.push(`${listing.basics.baths} bath`);
+    }
+    if (listing.basics?.sqft != null) {
+      propertyDetails.push(`${listing.basics.sqft.toLocaleString()} sqft`);
+    }
+    if (listing.basics?.year != null) {
+      propertyDetails.push(`built ${listing.basics.year}`);
+    }
+    const propertyDetailsStr = propertyDetails.length > 0 
+      ? propertyDetails.join(', ')
+      : 'Property details not available';
+
     // Build priorities list with contextual distance information
     const prioritiesList = targetScores.length
       ? targetScores.map(t => {
@@ -1490,19 +1518,14 @@ async function generateAIRecap(
       return `${t.label}: ${access}`;
     }).join(', ');
 
-    const prompt = `Property: ${listing.address || 'Unknown address'}
-${listing.basics?.beds ? `${listing.basics.beds} bed, ${listing.basics.baths} bath, ${listing.basics.sqft?.toLocaleString()} sqft` : ''}
-${listing.basics?.year ? `Built ${listing.basics.year}` : ''}
+    const prompt = `PROPERTY DATA:
+${propertyDetailsStr !== 'Property details not available' ? `Home: ${propertyDetailsStr}` : ''}
+Schools: ${schoolSummary}
+Nearby: ${availabilitySummary || 'Limited data'}
+Environment: ${envSummary}
+${prefs.extraFocusNotes ? `Notes: ${prefs.extraFocusNotes}` : ''}
 
-What's nearby: ${availabilitySummary || 'Limited amenities nearby'}
-
-School quality: ${schoolSummary}
-
-Environmental factors: ${envSummary}
-
-${prefs.extraFocusNotes ? `Additional context: ${prefs.extraFocusNotes}` : ''}
-
-You are a friendly, direct real estate advisor. Give a clear recommendation (1-2 sentences): should this buyer pursue this property or look elsewhere? Be honest about drawbacks but keep it conversational. Consider lifestyle fit and long-term needs. Keep it simple and friendly.`;
+Write 1-2 direct sentences. If it's a good fit, suggest they schedule a tour. If there are trade-offs, state them plainly. Be specific about what works or doesn't. No fluff.`;
 
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -1513,11 +1536,14 @@ You are a friendly, direct real estate advisor. Give a clear recommendation (1-2
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You are a helpful real estate advisor providing concise, actionable property recommendations. Use "we" instead of "I" when making recommendations. Keep responses brief (1-2 sentences maximum).' },
+          { 
+            role: 'system', 
+            content: 'You are a direct real estate analyst. Write 1-2 sentences max. Only reference data explicitly provided. Never invent property specs (beds, baths, sqft). If home details are provided, mention them. Be specific about what aligns with buyer priorities and what doesn\'t. For good matches, suggest scheduling a tour. For concerns, state them plainly. No filler phrases like "desirable living environment" - just facts and a clear next step.' 
+          },
           { role: 'user', content: prompt }
         ],
         max_tokens: 100,
-        temperature: 0.7,
+        temperature: 0.5,
       }),
     });
     

@@ -179,7 +179,7 @@ function generateEmailHTML(
               NestRecon is an intelligence-driven home search tool that scores properties based on what matters most to you — schools, walkability, noise levels, and more.
             </p>
             <a href="https://nestrecon.com" style="color: #556B2F; font-size: 13px; font-weight: 600; text-decoration: none;">
-              Learn more at nestrecon.com →
+              Learn more at NestRecon.com →
             </a>
           </div>
         </td>
@@ -225,10 +225,7 @@ function generateEmailHTML(
 
           <!-- Greeting -->
           <tr>
-            <td style="padding: 8px 40px 16px 40px;">
-              <p style="margin: 0; color: #4a5568; font-size: 15px; line-height: 1.6;">
-                Hi ${recipientName},
-              </p>
+            <td style="padding: 16px 40px 16px 40px;">
               <p style="margin: 12px 0 0 0; color: #4a5568; font-size: 15px; line-height: 1.6;">
                 <strong>${senderName}</strong> shared a property with you from their NestRecon reconnaissance.
               </p>
@@ -246,7 +243,7 @@ function generateEmailHTML(
                 </h2>
                 
                 <!-- Score and Badge -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 16px;">
                   <tr>
                     <td style="vertical-align: middle;">
                       <span style="font-size: 32px; font-weight: 800; color: #556B2F;">${property.nestrecon_score}</span>
@@ -260,9 +257,17 @@ function generateEmailHTML(
                   </tr>
                 </table>
 
-                <!-- Metrics Grid -->
-                ${metricsHTML ? `
+                <!-- Recon Recap -->
+                ${metrics.recap ? `
                   <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 8px;">
+                    <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">Recon Recap</p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 14px; line-height: 1.6;">${metrics.recap}</p>
+                  </div>
+                ` : ''}
+
+                <!-- Intel Summary (Metrics Grid) -->
+                ${metricsHTML ? `
+                  <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 16px;">
                     <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">Intel Summary</p>
                     ${metricsHTML}
                   </div>
@@ -292,7 +297,7 @@ function generateEmailHTML(
               
               <!-- Tactical Brackets -->
               <div style="text-align: center; margin-bottom: 20px;">
-                <span style="color: #556B2F; font-size: 18px; opacity: 0.3;">[ • ]</span>
+                <span style="color: #556B2F; font-size: 18px; opacity: 0.3;">[ NestRecon ]</span>
               </div>
 
               <!-- Footer Links -->
@@ -310,8 +315,7 @@ function generateEmailHTML(
 
               <!-- Company Info -->
               <p style="margin: 0 0 8px 0; color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center;">
-                NestRecon - Intelligence-Driven Home Search<br>
-                Helping home buyers make informed decisions
+                Tactical recon for homebuyers
               </p>
 
             </td>

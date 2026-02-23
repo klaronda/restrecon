@@ -37,6 +37,25 @@ SUPABASE_SERVICE_ROLE_KEY=<service role key>
 ```
 In Stripe, set the Payment Link "After payment" redirect to your app (e.g., https://nestrecon.com/account?payment=success). On `checkout.session.completed`, the webhook sets `users.plan='pro'` (matched by checkout email) and clears `trial_ends_at`. The success query parameter triggers a payment success message on the account page.
 
+### Saved Properties & Sharing (Edge Functions)
+Deploy `supabase/functions/properties-save` and `supabase/functions/properties-share`, then set these secrets in Supabase:
+```
+RESEND_API_KEY=<your resend api key>
+RESEND_FROM_EMAIL="NestRecon <share@nestrecon.com>"
+SUPABASE_URL=<your supabase url>
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+```
+**Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are already set if you've configured the Stripe webhook above.
+
+**Resend Setup:**
+1. Create a Resend account at https://resend.com
+2. Get your API key from the Resend dashboard
+3. Verify your domain (nestrecon.com) in Resend for production emails
+4. Add the API key and from email to Supabase Edge Function secrets
+
+**Database Migration:**
+Run the migration file `supabase/migrations/2025-01-10-create-saved-properties-tables.sql` in your Supabase SQL Editor to create the required tables and RLS policies.
+
 ---
 
 ## 📂 File Structure Guide
